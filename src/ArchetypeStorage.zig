@@ -12,21 +12,18 @@ const builtin = @import("builtin");
 
 const ArchetypeStorage = @This();
 
-pub const TypeId = enum(usize) { _ };
-
 const is_debug = builtin.mode == .Debug;
 
-// typeId implementation by Felix "xq" Queißner
-pub fn typeId(comptime T: type) TypeId {
+pub fn typeId(comptime T: type) usize {
     _ = T;
-    return @intToEnum(TypeId, @ptrToInt(&struct {
+    return @ptrToInt(&struct {
         var x: u8 = 0;
-    }.x));
+    }.x);
 }
 
 pub const Column = struct {
     name: []const u8,
-    type_id: TypeId,
+    type_id: usize,
     size: u32,
     alignment: u16,
     values: []u8,

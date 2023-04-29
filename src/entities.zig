@@ -11,7 +11,7 @@ pub const EntityID = u64;
 
 fn byTypeId(context: void, lhs: ArchetypeStorage.Column, rhs: ArchetypeStorage.Column) bool {
     _ = context;
-    return @enumToInt(lhs.type_id) < @enumToInt(rhs.type_id);
+    return lhs.type_id < rhs.type_id;
 }
 
 pub const void_archetype_hash = std.math.maxInt(u64);
