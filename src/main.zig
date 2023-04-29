@@ -34,7 +34,9 @@ pub const World = @import("systems.zig").World;
 test "inclusion" {
     std.testing.refAllDeclsRecursive(@This());
     std.testing.refAllDeclsRecursive(@import("ArchetypeStorage.zig"));
+    std.testing.refAllDeclsRecursive(@import("entities.zig"));
     std.testing.refAllDeclsRecursive(@import("query.zig"));
+    std.testing.refAllDeclsRecursive(@import("systems.zig"));
 }
 
 test "example" {
