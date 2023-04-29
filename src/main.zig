@@ -16,6 +16,7 @@ const testing = std.testing;
 
 pub const EntityID = @import("entities.zig").EntityID;
 pub const Entities = @import("entities.zig").Entities;
+pub const ArchetypeStorage = @import("ArchetypeStorage.zig");
 
 pub const Module = @import("systems.zig").Module;
 pub const Modules = @import("systems.zig").Modules;
@@ -32,6 +33,7 @@ pub const World = @import("systems.zig").World;
 
 test "inclusion" {
     std.testing.refAllDeclsRecursive(@This());
+    std.testing.refAllDeclsRecursive(@import("ArchetypeStorage.zig"));
     std.testing.refAllDeclsRecursive(@import("query.zig"));
 }
 
