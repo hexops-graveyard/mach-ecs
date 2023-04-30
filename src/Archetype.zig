@@ -10,7 +10,7 @@ const testing = std.testing;
 const assert = std.debug.assert;
 const builtin = @import("builtin");
 
-const ArchetypeStorage = @This();
+const Archetype = @This();
 
 const is_debug = builtin.mode == .Debug;
 
@@ -42,21 +42,21 @@ columns: []Column,
 
 /// Calculates the storage.hash value. This is a hash of all the component names, and can
 /// effectively be used to uniquely identify this table within the database.
-pub fn calculateHash(storage: *ArchetypeStorage) void {
+pub fn calculateHash(storage: *Archetype) void {
     storage.hash = 0;
     for (storage.columns) |column| {
         storage.hash ^= std.hash_map.hashString(column.name);
     }
 }
 
-pub fn deinit(storage: *ArchetypeStorage, gpa: Allocator) void {
+pub fn deinit(storage: *Archetype, gpa: Allocator) void {
     if (storage.capacity > 0) {
         for (storage.columns) |column| gpa.free(column.values);
     }
     gpa.free(storage.columns);
 }
 
-fn debugValidateRow(storage: *ArchetypeStorage, gpa: Allocator, row: anytype) void {
+fn debugValidateRow(storage: *Archetype, gpa: Allocator, row: anytype) void {
     inline for (std.meta.fields(@TypeOf(row)), 0..) |field, index| {
         const column = storage.columns[index];
         if (typeId(field.type) != column.type_id) {
@@ -72,7 +72,7 @@ fn debugValidateRow(storage: *ArchetypeStorage, gpa: Allocator, row: anytype) vo
 }
 
 /// appends a new row to this table, with all undefined values.
-pub fn appendUndefined(storage: *ArchetypeStorage, gpa: Allocator) !u32 {
+pub fn appendUndefined(storage: *Archetype, gpa: Allocator) !u32 {
     try storage.ensureUnusedCapacity(gpa, 1);
     assert(storage.len < storage.capacity);
     const row_index = storage.len;
@@ -80,7 +80,7 @@ pub fn appendUndefined(storage: *ArchetypeStorage, gpa: Allocator) !u32 {
     return row_index;
 }
 
-pub fn append(storage: *ArchetypeStorage, gpa: Allocator, row: anytype) !u32 {
+pub fn append(storage: *Archetype, gpa: Allocator, row: anytype) !u32 {
     if (is_debug) storage.debugValidateRow(gpa, row);
 
     try storage.ensureUnusedCapacity(gpa, 1);
@@ -91,17 +91,17 @@ pub fn append(storage: *ArchetypeStorage, gpa: Allocator, row: anytype) !u32 {
     return storage.len;
 }
 
-pub fn undoAppend(storage: *ArchetypeStorage) void {
+pub fn undoAppend(storage: *Archetype) void {
     storage.len -= 1;
 }
 
 /// Ensures there is enough unused capacity to store `num_rows`.
-pub fn ensureUnusedCapacity(storage: *ArchetypeStorage, gpa: Allocator, num_rows: usize) !void {
+pub fn ensureUnusedCapacity(storage: *Archetype, gpa: Allocator, num_rows: usize) !void {
     return storage.ensureTotalCapacity(gpa, storage.len + num_rows);
 }
 
 /// Ensures the total capacity is enough to store `new_capacity` rows total.
-pub fn ensureTotalCapacity(storage: *ArchetypeStorage, gpa: Allocator, new_capacity: usize) !void {
+pub fn ensureTotalCapacity(storage: *Archetype, gpa: Allocator, new_capacity: usize) !void {
     var better_capacity = storage.capacity;
     if (better_capacity >= new_capacity) return;
 
@@ -117,7 +117,7 @@ pub fn ensureTotalCapacity(storage: *ArchetypeStorage, gpa: Allocator, new_capac
 ///
 /// Asserts `new_capacity >= storage.len`, if you want to shrink capacity then change the len
 /// yourself first.
-pub fn setCapacity(storage: *ArchetypeStorage, gpa: Allocator, new_capacity: usize) !void {
+pub fn setCapacity(storage: *Archetype, gpa: Allocator, new_capacity: usize) !void {
     assert(new_capacity >= storage.len);
 
     // TODO: ensure columns are sorted by type_id
@@ -134,7 +134,7 @@ pub fn setCapacity(storage: *ArchetypeStorage, gpa: Allocator, new_capacity: usi
 }
 
 /// Sets the entire row's values in the table.
-pub fn setRow(storage: *ArchetypeStorage, gpa: Allocator, row_index: u32, row: anytype) void {
+pub fn setRow(storage: *Archetype, gpa: Allocator, row_index: u32, row: anytype) void {
     if (is_debug) storage.debugValidateRow(gpa, row);
 
     const fields = std.meta.fields(@TypeOf(row));
@@ -149,7 +149,7 @@ pub fn setRow(storage: *ArchetypeStorage, gpa: Allocator, row_index: u32, row: a
 }
 
 /// Sets the value of the named components (columns) for the given row in the table.
-pub fn set(storage: *ArchetypeStorage, gpa: Allocator, row_index: u32, name: []const u8, component: anytype) void {
+pub fn set(storage: *Archetype, gpa: Allocator, row_index: u32, name: []const u8, component: anytype) void {
     assert(storage.len != 0 and storage.len >= row_index);
 
     const ColumnType = @TypeOf(component);
@@ -159,21 +159,21 @@ pub fn set(storage: *ArchetypeStorage, gpa: Allocator, row_index: u32, name: []c
     values[row_index] = component;
 }
 
-pub fn get(storage: *ArchetypeStorage, gpa: Allocator, row_index: u32, name: []const u8, comptime ColumnType: type) ?ColumnType {
+pub fn get(storage: *Archetype, gpa: Allocator, row_index: u32, name: []const u8, comptime ColumnType: type) ?ColumnType {
     if (@sizeOf(ColumnType) == 0) return {};
 
     const values = storage.getColumnValues(gpa, name, ColumnType) orelse return null;
     return values[row_index];
 }
 
-pub fn getRaw(storage: *ArchetypeStorage, row_index: u32, column: Column) []u8 {
+pub fn getRaw(storage: *Archetype, row_index: u32, column: Column) []u8 {
     const values = storage.getRawColumnValues(column.name) orelse @panic("getRaw(): no such component");
     const start = column.size * row_index;
     const end = start + column.size;
     return values[start..end];
 }
 
-pub fn setRaw(storage: *ArchetypeStorage, row_index: u32, column: Column, component: []u8) !void {
+pub fn setRaw(storage: *Archetype, row_index: u32, column: Column, component: []u8) !void {
     const values = storage.getRawColumnValues(column.name) orelse @panic("setRaw(): no such component");
     const start = column.size * row_index;
     assert(component.len == column.size);
@@ -181,7 +181,7 @@ pub fn setRaw(storage: *ArchetypeStorage, row_index: u32, column: Column, compon
 }
 
 /// Swap-removes the specified row with the last row in the table.
-pub fn remove(storage: *ArchetypeStorage, row_index: u32) void {
+pub fn remove(storage: *Archetype, row_index: u32) void {
     if (storage.len > 1) {
         for (storage.columns) |column| {
             const dstStart = column.size * row_index;
@@ -195,7 +195,7 @@ pub fn remove(storage: *ArchetypeStorage, row_index: u32) void {
 }
 
 /// Tells if this archetype has every one of the given components.
-pub fn hasComponents(storage: *ArchetypeStorage, components: []const []const u8) bool {
+pub fn hasComponents(storage: *Archetype, components: []const []const u8) bool {
     for (components) |component_name| {
         if (!storage.hasComponent(component_name)) return false;
     }
@@ -203,14 +203,14 @@ pub fn hasComponents(storage: *ArchetypeStorage, components: []const []const u8)
 }
 
 /// Tells if this archetype has a component with the specified name.
-pub fn hasComponent(storage: *ArchetypeStorage, component: []const u8) bool {
+pub fn hasComponent(storage: *Archetype, component: []const u8) bool {
     for (storage.columns) |column| {
         if (std.mem.eql(u8, column.name, component)) return true;
     }
     return false;
 }
 
-pub fn getColumnValues(storage: *ArchetypeStorage, gpa: Allocator, name: []const u8, comptime ColumnType: type) ?[]ColumnType {
+pub fn getColumnValues(storage: *Archetype, gpa: Allocator, name: []const u8, comptime ColumnType: type) ?[]ColumnType {
     for (storage.columns) |*column| {
         if (!std.mem.eql(u8, column.name, name)) continue;
         if (is_debug) {
@@ -231,7 +231,7 @@ pub fn getColumnValues(storage: *ArchetypeStorage, gpa: Allocator, name: []const
     return null;
 }
 
-pub fn getRawColumnValues(storage: *ArchetypeStorage, name: []const u8) ?[]u8 {
+pub fn getRawColumnValues(storage: *Archetype, name: []const u8) ?[]u8 {
     for (storage.columns) |column| {
         if (!std.mem.eql(u8, column.name, name)) continue;
         return column.values;

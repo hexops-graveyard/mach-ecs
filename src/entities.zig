@@ -4,12 +4,12 @@ const testing = std.testing;
 const builtin = @import("builtin");
 const assert = std.debug.assert;
 const query_mod = @import("query.zig");
-const ArchetypeStorage = @import("ArchetypeStorage.zig");
+const Archetype = @import("Archetype.zig");
 
 /// An entity ID uniquely identifies an entity globally within an Entities set.
 pub const EntityID = u64;
 
-fn byTypeId(context: void, lhs: ArchetypeStorage.Column, rhs: ArchetypeStorage.Column) bool {
+fn byTypeId(context: void, lhs: Archetype.Column, rhs: Archetype.Column) bool {
     _ = context;
     return lhs.type_id < rhs.type_id;
 }
@@ -62,7 +62,7 @@ pub const void_archetype_hash = std.math.maxInt(u64);
 ///
 /// Database equivalents:
 /// * Entities is a database of tables, where each table represents a single archetype.
-/// * ArchetypeStorage is a table, whose rows are entities and columns are components.
+/// * Archetype is a table, whose rows are entities and columns are components.
 /// * EntityID is a mere 32-bit array index, pointing to a 16-bit archetype table index and 32-bit
 ///   row index, enabling entities to "move" from one archetype table to another seamlessly and
 ///   making lookup by entity ID a few cheap array indexing operations.
@@ -82,7 +82,7 @@ pub fn Entities(comptime all_components: anytype) type {
         /// A mapping of archetype hash to their storage.
         ///
         /// Database equivalent: table name -> tables representing entities.
-        archetypes: std.AutoArrayHashMapUnmanaged(u64, ArchetypeStorage) = .{},
+        archetypes: std.AutoArrayHashMapUnmanaged(u64, Archetype) = .{},
 
         const Self = @This();
 
@@ -105,16 +105,16 @@ pub fn Entities(comptime all_components: anytype) type {
         pub fn init(allocator: Allocator) !Self {
             var entities = Self{ .allocator = allocator };
 
-            const columns = try allocator.alloc(ArchetypeStorage.Column, 1);
+            const columns = try allocator.alloc(Archetype.Column, 1);
             columns[0] = .{
                 .name = "id",
-                .type_id = ArchetypeStorage.typeId(EntityID),
+                .type_id = Archetype.typeId(EntityID),
                 .size = @sizeOf(EntityID),
                 .alignment = @alignOf(EntityID),
                 .values = undefined,
             };
 
-            try entities.archetypes.put(allocator, void_archetype_hash, ArchetypeStorage{
+            try entities.archetypes.put(allocator, void_archetype_hash, Archetype{
                 .len = 0,
                 .capacity = 0,
                 .columns = columns,
@@ -175,7 +175,7 @@ pub fn Entities(comptime all_components: anytype) type {
         }
 
         /// Returns the archetype storage for the given entity.
-        pub inline fn archetypeByID(entities: *Self, entity: EntityID) *ArchetypeStorage {
+        pub inline fn archetypeByID(entities: *Self, entity: EntityID) *Archetype {
             const ptr = entities.entities.get(entity).?;
             return &entities.archetypes.values()[ptr.archetype_index];
         }
@@ -214,26 +214,26 @@ pub fn Entities(comptime all_components: anytype) type {
             archetype = entities.archetypeByID(entity);
 
             if (!archetype_entry.found_existing) {
-                const columns = entities.allocator.alloc(ArchetypeStorage.Column, archetype.columns.len + 1) catch |err| {
+                const columns = entities.allocator.alloc(Archetype.Column, archetype.columns.len + 1) catch |err| {
                     // Note: this removal doesn't break index accesses performed by archetypeByID
                     // since our archetype is guaranteed to be the last index right now.
                     assert(entities.archetypes.swapRemove(new_hash));
                     return err;
                 };
-                std.mem.copy(ArchetypeStorage.Column, columns, archetype.columns);
+                std.mem.copy(Archetype.Column, columns, archetype.columns);
                 for (columns) |*column| {
                     column.values = undefined;
                 }
                 columns[columns.len - 1] = .{
                     .name = name,
-                    .type_id = ArchetypeStorage.typeId(@TypeOf(component)),
+                    .type_id = Archetype.typeId(@TypeOf(component)),
                     .size = @sizeOf(@TypeOf(component)),
                     .alignment = if (@sizeOf(@TypeOf(component)) == 0) 1 else @alignOf(@TypeOf(component)),
                     .values = undefined,
                 };
-                std.sort.sort(ArchetypeStorage.Column, columns, {}, byTypeId);
+                std.sort.sort(Archetype.Column, columns, {}, byTypeId);
 
-                archetype_entry.value_ptr.* = ArchetypeStorage{
+                archetype_entry.value_ptr.* = Archetype{
                     .len = 0,
                     .capacity = 0,
                     .columns = columns,
@@ -363,7 +363,7 @@ pub fn Entities(comptime all_components: anytype) type {
             archetype = entities.archetypeByID(entity);
 
             if (!archetype_entry.found_existing) {
-                const columns = entities.allocator.alloc(ArchetypeStorage.Column, archetype.columns.len - 1) catch |err| {
+                const columns = entities.allocator.alloc(Archetype.Column, archetype.columns.len - 1) catch |err| {
                     // Note: this removal doesn't break index accesses performed by archetypeByID
                     // since our archetype is guaranteed to be the last index right now.
                     assert(entities.archetypes.swapRemove(new_hash));
@@ -377,7 +377,7 @@ pub fn Entities(comptime all_components: anytype) type {
                     i += 1;
                 }
 
-                archetype_entry.value_ptr.* = ArchetypeStorage{
+                archetype_entry.value_ptr.* = Archetype{
                     .len = 0,
                     .capacity = 0,
                     .columns = columns,
@@ -468,7 +468,7 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
             };
         }
 
-        pub fn next(iter: *Self) ?*ArchetypeStorage {
+        pub fn next(iter: *Self) ?*Archetype {
             var archetypes = iter.entities.archetypes.entries.items(.value);
             while (true) {
                 if (iter.index == archetypes.len - 1) return null;
@@ -478,7 +478,7 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
             }
         }
 
-        pub fn match(iter: *Self, consideration: *ArchetypeStorage) bool {
+        pub fn match(iter: *Self, consideration: *Archetype) bool {
             if (consideration.len == 0) return false;
             switch (iter.query) {
                 .all => {
