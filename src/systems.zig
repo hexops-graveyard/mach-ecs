@@ -128,6 +128,14 @@ fn NamespacedComponents(comptime modules: anytype) type {
             }};
         }
     }
+    fields = fields ++ [_]std.builtin.Type.StructField{.{
+        .name = "entity",
+        .type = @TypeOf(.{ .id = EntityID }),
+        .default_value = null,
+        .is_comptime = false,
+        .alignment = @alignOf(@TypeOf(.{ .id = EntityID })),
+    }};
+
     return @Type(.{
         .Struct = .{
             .layout = .Auto,
@@ -226,6 +234,7 @@ fn FieldType(comptime Struct: type, comptime field_name: []const u8) type {
 
 pub fn World(comptime modules: anytype) type {
     const all_components = namespacedComponents(modules);
+    _ = all_components.entity.id; // entity.id is implicitly generated
     return struct {
         allocator: Allocator,
         entities: Entities(all_components),
