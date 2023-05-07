@@ -206,6 +206,7 @@ fn clearCacheIndex(tree: *ArchetypeTree, allocator: Allocator, i: u32, retry: bo
 }
 
 pub fn deinit(tree: *ArchetypeTree, allocator: Allocator) void {
+    for (tree.nodes.items) |*node| if (node.archetype) |*v| v.deinit(allocator);
     tree.nodes.deinit(allocator);
     tree.buf.deinit(allocator);
 }

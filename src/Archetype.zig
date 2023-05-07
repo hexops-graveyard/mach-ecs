@@ -2,7 +2,6 @@
 //! types. When a component is added or removed from an entity, it's archetype changes.
 //!
 //! Database equivalent: a table where rows are entities and columns are components (dense storage).
-//! The hash of every component name in this archetype, i.e. the name of this archetype.
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
@@ -29,8 +28,6 @@ pub const Column = struct {
     values: []u8,
 };
 
-hash: u64,
-
 /// The length of the table (used number of rows.)
 len: u32,
 
@@ -39,15 +36,6 @@ capacity: u32,
 
 /// Describes the columns in this table. Each column stores its row values.
 columns: []Column,
-
-/// Calculates the storage.hash value. This is a hash of all the component names, and can
-/// effectively be used to uniquely identify this table within the database.
-pub fn calculateHash(storage: *Archetype) void {
-    storage.hash = 0;
-    for (storage.columns) |column| {
-        storage.hash ^= std.hash_map.hashString(column.name);
-    }
-}
 
 pub fn deinit(storage: *Archetype, gpa: Allocator) void {
     if (storage.capacity > 0) {
