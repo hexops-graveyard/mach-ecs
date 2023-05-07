@@ -94,6 +94,17 @@ test "example" {
     try physics.set(player3, .id, 1234);
 
     //-------------------------------------------------------------------------
+    // Querying
+    var iter = world.entities.query(.{ .all = &.{
+        .{ .physics = &.{.id} },
+    } });
+    while (iter.next()) |archetype| {
+        var ids = archetype.slice(.physics, .id);
+        try testing.expectEqual(@as(usize, 1), ids.len);
+        try testing.expectEqual(player2, 1);
+    }
+
+    //-------------------------------------------------------------------------
     // Send events to modules
     try world.send(.tick);
 }

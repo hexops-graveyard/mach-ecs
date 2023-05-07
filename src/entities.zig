@@ -402,20 +402,22 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
             };
         }
 
-        pub fn next(iter: *Self) ?*Archetype {
+        // TODO: all_components is a superset of queried items, not type-safe.
+        pub fn next(iter: *Self) ?Archetype.Slicer(all_components) {
             var nodes = iter.entities.tree.nodes.items;
             while (true) {
                 if (iter.index == nodes.len - 1) return null;
                 iter.index += 1;
                 var node = &nodes[iter.index];
                 if (node.archetype) |*archetype| {
-                    if (iter.match(archetype)) return archetype;
+                    if (iter.match(archetype)) return Archetype.Slicer(all_components){ .archetype = archetype };
                 } else continue;
             }
         }
 
         pub fn match(iter: *Self, consideration: *Archetype) bool {
             if (consideration.len == 0) return false;
+            var buf: [2048]u8 = undefined;
             switch (iter.query) {
                 .all => {
                     for (iter.query.all) |namespace| {
@@ -423,7 +425,7 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
                             inline else => |components| {
                                 for (components) |component| {
                                     const name = switch (component) {
-                                        inline else => |c| @tagName(namespace) ++ "." ++ @tagName(c),
+                                        inline else => |c| std.fmt.bufPrint(&buf, "{s}.{s}", .{ @tagName(namespace), @tagName(c) }) catch break,
                                     };
                                     var has_column = false;
                                     for (consideration.columns) |column| {
@@ -461,6 +463,9 @@ test "example" {
     const Rotation = struct { degrees: f32 };
 
     const all_components = .{
+        .entity = .{
+            .id = EntityID,
+        },
         .game = .{
             .location = Location,
             .name = []const u8,
@@ -530,9 +535,9 @@ test "example" {
         .{ .game = &.{.rotation} },
     } });
     while (iter.next()) |archetype| {
-        var entities = archetype.getColumnValues(allocator, "id", EntityID).?[0..archetype.len];
-        try testing.expectEqual(@as(usize, 1), entities.len);
-        try testing.expectEqual(player2, entities[0]);
+        var ids = archetype.slice(.entity, .id);
+        try testing.expectEqual(@as(usize, 1), ids.len);
+        try testing.expectEqual(player2, ids[0]);
     }
 
     // TODO: iterating components an entity has not currently supported.

@@ -37,6 +37,33 @@ capacity: u32,
 /// Describes the columns in this table. Each column stores its row values.
 columns: []Column,
 
+pub fn Slicer(comptime all_components: anytype) type {
+    // var ids = archetype.slice(.id);
+    // // var entities = archetype.getColumnValues(allocator, "id", EntityID).?[0..archetype.len];
+    return struct {
+        archetype: *Archetype,
+
+        pub fn slice(
+            slicer: @This(),
+            comptime namespace_name: std.meta.FieldEnum(@TypeOf(all_components)),
+            comptime component_name: std.meta.FieldEnum(@TypeOf(@field(all_components, @tagName(namespace_name)))),
+        ) []@field(
+            @field(all_components, @tagName(namespace_name)),
+            @tagName(component_name),
+        ) {
+            const Type = @field(
+                @field(all_components, @tagName(namespace_name)),
+                @tagName(component_name),
+            );
+            if (namespace_name == .entity and component_name == .id) {
+                return slicer.archetype.getColumnValues(std.heap.page_allocator, "id", Type).?[0..slicer.archetype.len];
+            }
+            const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
+            return slicer.archetype.getColumnValues(std.heap.page_allocator, name, Type).?[0..slicer.archetype.len];
+        }
+    };
+}
+
 pub fn deinit(storage: *Archetype, gpa: Allocator) void {
     if (storage.capacity > 0) {
         for (storage.columns) |column| gpa.free(column.values);
