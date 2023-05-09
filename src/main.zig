@@ -98,11 +98,21 @@ test "example" {
     var iter = world.entities.query(.{ .all = &.{
         .{ .physics = &.{.id} },
     } });
-    while (iter.next()) |archetype| {
-        var ids = archetype.slice(.physics, .id);
-        try testing.expectEqual(@as(usize, 1), ids.len);
-        try testing.expectEqual(player2, 1);
-    }
+
+    var archetype = iter.next().?;
+    var ids = archetype.slice(.physics, .id);
+    try testing.expectEqual(@as(usize, 2), ids.len);
+    try testing.expectEqual(@as(usize, 1234), ids[0]);
+    try testing.expectEqual(@as(usize, 1234), ids[1]);
+
+    archetype = iter.next().?;
+    ids = archetype.slice(.physics, .id);
+    try testing.expectEqual(@as(usize, 1), ids.len);
+    try testing.expectEqual(@as(usize, 1234), ids[0]);
+
+    // TODO: can't write @as type here easily due to generic parameter, should be exposed
+    // ?Archetype.Slicer(all_components)
+    try testing.expectEqual(iter.next(), null);
 
     //-------------------------------------------------------------------------
     // Send events to modules

@@ -554,3 +554,57 @@ test "empty_world" {
     // Create a world.
     defer world.deinit();
 }
+
+test "many entities" {
+    const allocator = testing.allocator;
+
+    const Location = struct {
+        x: f32 = 0,
+        y: f32 = 0,
+        z: f32 = 0,
+    };
+
+    const Rotation = struct { degrees: f32 };
+
+    const all_components = .{
+        .entity = .{
+            .id = EntityID,
+        },
+        .game = .{
+            .location = Location,
+            .name = []const u8,
+            .rotation = Rotation,
+        },
+    };
+
+    // Create many entities
+    var world = try Entities(all_components).init(allocator);
+    defer world.deinit();
+    for (0..8192) |_| {
+        var player = try world.new();
+        try world.setComponent(player, .game, .name, "jane");
+        try world.setComponent(player, .game, .location, .{});
+    }
+
+    // Confirm the number of archetypes created
+    var archetypes = world.tree.nodes.items;
+    try testing.expectEqual(@as(usize, 4), archetypes.len);
+
+    // Confirm archetypes
+    var columns = archetypes[0].archetype.?.columns;
+    try testing.expectEqual(@as(usize, 1), columns.len);
+    try testing.expectEqualStrings("id", columns[0].name);
+
+    columns = archetypes[1].archetype.?.columns;
+    try testing.expectEqual(@as(usize, 2), columns.len);
+    try testing.expectEqualStrings("id", columns[0].name);
+    try testing.expectEqualStrings("game.name", columns[1].name);
+
+    try testing.expectEqual(archetypes[2].archetype, null);
+
+    columns = archetypes[3].archetype.?.columns;
+    try testing.expectEqual(@as(usize, 3), columns.len);
+    try testing.expectEqualStrings("id", columns[0].name);
+    try testing.expectEqualStrings("game.name", columns[1].name);
+    try testing.expectEqualStrings("game.location", columns[2].name);
+}

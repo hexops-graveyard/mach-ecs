@@ -49,6 +49,10 @@ pub fn initCapacity(allocator: Allocator, capacity: usize) !ArchetypeTree {
 }
 
 fn insert(tree: *ArchetypeTree, allocator: Allocator, parent_idx: u32, name: u32) !u32 {
+    // TODO: expensive! maybe we should introduce child_idx?
+    for (tree.nodes.items, 0..) |node, idx| {
+        if (node.parent_idx == parent_idx and node.name == name) return @intCast(u32, idx);
+    }
     try tree.nodes.append(allocator, .{ .name = name, .parent_idx = parent_idx });
     return @intCast(u32, tree.nodes.items.len - 1);
 }
