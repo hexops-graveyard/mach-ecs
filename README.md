@@ -42,3 +42,42 @@ There are plenty of known issues, and things that just aren't implemented yet. A
 * When entity is deleted, maybe via systems / an event/callback, need a way to be notified of destruction. Same with updated maybe.
 
 See also the numerous TODOs in main.zig.
+
+## Getting started
+
+### Adding dependency
+
+Create a `build.zig.zon` file in your project (replace `$LATEST_COMMIT` with the latest commit hash):
+
+```
+.{
+    .name = "mypkg",
+    .version = "0.1.0",
+    .dependencies = .{
+        .mach_ecs = .{
+            .url = "https://github.com/hexops/mach-ecs/archive/$LATEST_COMMIT.tar.gz",
+        },
+    },
+}
+```
+
+Run `zig build` in your project, and the compiler instruct you to add a `.hash = "..."` field next to `.url`.
+
+Then use the dependency in your `build.zig`:
+
+```zig
+...
+pub fn build(b: *Build) void {
+    ...
+    exe.addModule("mach-ecs", b.dependency("mach_ecs", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("mach-ecs"));
+}
+```
+
+You may then `const ecs = @import("mach-ecs);` and use it.
+
+### Usage
+
+For usage, look at the tests in `src/main.zig`
