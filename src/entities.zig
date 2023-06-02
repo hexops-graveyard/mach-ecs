@@ -207,7 +207,7 @@ pub fn Entities(comptime all_components: anytype) type {
                     .alignment = if (@sizeOf(@TypeOf(component)) == 0) 1 else @alignOf(@TypeOf(component)),
                     .values = undefined,
                 };
-                std.sort.sort(Archetype.Column, columns, {}, byTypeId);
+                std.sort.pdq(Archetype.Column, columns, {}, byTypeId);
 
                 archetype_node.archetype = .{
                     .len = 0,
