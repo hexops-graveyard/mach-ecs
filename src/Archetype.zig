@@ -15,7 +15,7 @@ const is_debug = builtin.mode == .Debug;
 
 pub fn typeId(comptime T: type) usize {
     _ = T;
-    return @ptrToInt(&struct {
+    return @intFromPtr(&struct {
         var x: u8 = 0;
     }.x);
 }

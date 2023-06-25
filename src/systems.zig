@@ -91,7 +91,7 @@ pub fn MessagesTag(comptime messages: anytype) type {
 
     return @Type(.{
         .Enum = .{
-            .tag_type = std.meta.Int(.unsigned, @floatToInt(u16, math.ceil(math.log2(@intToFloat(f64, message_fields.len))))),
+            .tag_type = std.meta.Int(.unsigned, @intFromFloat(u16, math.ceil(math.log2(@floatFromInt(f64, message_fields.len))))),
             .fields = fields,
             .decls = &[_]std.builtin.Type.Declaration{},
             .is_exhaustive = true,

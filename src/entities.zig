@@ -511,17 +511,17 @@ test "example" {
     var archetypes = world.tree.nodes.items;
     try testing.expectEqual(@as(usize, 5), archetypes.len);
     try testing.expectEqual(@as(u32, 0), archetypes[0].name);
-    try testing.expectEqual(@as(u32, 3836504834), archetypes[1].name);
-    try testing.expectEqual(@as(u32, 1476521729), archetypes[2].name);
-    try testing.expectEqual(@as(u32, 3836504834), archetypes[3].name);
-    try testing.expectEqual(@as(u32, 3247569048), archetypes[4].name);
+    try testing.expectEqual(@as(u32, 163538855), archetypes[1].name);
+    try testing.expectEqual(@as(u32, 177100276), archetypes[2].name);
+    try testing.expectEqual(@as(u32, 934892538), archetypes[3].name);
+    try testing.expectEqual(@as(u32, 177100276), archetypes[4].name);
 
     // Number of (living) entities stored in an archetype table.
     try testing.expectEqual(@as(usize, 1), archetypes[0].archetype.?.len);
     try testing.expectEqual(@as(usize, 0), archetypes[1].archetype.?.len);
     try testing.expectEqual(@as(usize, 0), archetypes[2].archetype.?.len);
-    try testing.expectEqual(@as(usize, 0), archetypes[3].archetype.?.len);
-    try testing.expectEqual(@as(usize, 1), archetypes[4].archetype.?.len);
+    try testing.expectEqual(@as(usize, 1), archetypes[3].archetype.?.len);
+    try testing.expectEqual(@as(usize, 0), archetypes[4].archetype.?.len);
 
     // Resolve archetype by entity ID and print column names
     var columns = world.archetypeByID(player2).columns;
@@ -588,7 +588,7 @@ test "many entities" {
 
     // Confirm the number of archetypes created
     var archetypes = world.tree.nodes.items;
-    try testing.expectEqual(@as(usize, 4), archetypes.len);
+    try testing.expectEqual(@as(usize, 3), archetypes.len);
 
     // Confirm archetypes
     var columns = archetypes[0].archetype.?.columns;
@@ -600,9 +600,7 @@ test "many entities" {
     try testing.expectEqualStrings("id", columns[0].name);
     try testing.expectEqualStrings("game.name", columns[1].name);
 
-    try testing.expectEqual(archetypes[2].archetype, null);
-
-    columns = archetypes[3].archetype.?.columns;
+    columns = archetypes[2].archetype.?.columns;
     try testing.expectEqual(@as(usize, 3), columns.len);
     try testing.expectEqualStrings("id", columns[0].name);
     try testing.expectEqualStrings("game.name", columns[1].name);
