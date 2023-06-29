@@ -188,7 +188,7 @@ pub fn Entities(comptime all_components: anytype) type {
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
 
             // TODO: use a name set, not hashing, for names.
-            const name_hash = @truncate(u32, std.hash_map.hashString(name));
+            const name_hash = @as(u32, @truncate(std.hash_map.hashString(name)));
             const prev_archetype_idx = entities.entities.get(entity).?.archetype_index;
             var prev_archetype = &entities.tree.index(prev_archetype_idx).archetype.?;
             const archetype_idx = try entities.tree.add(entities.allocator, prev_archetype_idx, name_hash);
@@ -298,7 +298,7 @@ pub fn Entities(comptime all_components: anytype) type {
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
 
             // TODO: use a name set, not hashing, for names.
-            const name_hash = @truncate(u32, std.hash_map.hashString(name));
+            const name_hash = @as(u32, @truncate(std.hash_map.hashString(name)));
             const prev_archetype_idx = entities.entities.get(entity).?.archetype_index;
             var prev_archetype = &entities.tree.index(prev_archetype_idx).archetype.?;
             const archetype_idx = try entities.tree.remove(entities.allocator, prev_archetype_idx, name_hash);

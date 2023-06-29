@@ -145,7 +145,7 @@ pub fn setCapacity(storage: *Archetype, gpa: Allocator, new_capacity: usize) !vo
         }
         column.values = new_values;
     }
-    storage.capacity = @intCast(u32, new_capacity);
+    storage.capacity = @as(u32, @intCast(new_capacity));
 }
 
 /// Sets the entire row's values in the table.
@@ -158,7 +158,7 @@ pub fn setRow(storage: *Archetype, gpa: Allocator, row_index: u32, row: anytype)
         if (@sizeOf(ColumnType) == 0) continue;
 
         var column = storage.columns[index];
-        const column_values = @ptrCast([*]ColumnType, @alignCast(@alignOf(ColumnType), column.values.ptr));
+        const column_values = @as([*]ColumnType, @ptrCast(@alignCast(column.values.ptr)));
         column_values[row_index] = @field(row, field.name);
     }
 }
@@ -239,7 +239,7 @@ pub fn getColumnValues(storage: *Archetype, gpa: Allocator, name: []const u8, co
                 @panic(msg);
             }
         }
-        var ptr = @ptrCast([*]ColumnType, @alignCast(@alignOf(ColumnType), column.values.ptr));
+        var ptr = @as([*]ColumnType, @ptrCast(@alignCast(column.values.ptr)));
         const column_values = ptr[0..storage.capacity];
         return column_values;
     }

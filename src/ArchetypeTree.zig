@@ -51,10 +51,10 @@ pub fn initCapacity(allocator: Allocator, capacity: usize) !ArchetypeTree {
 fn insert(tree: *ArchetypeTree, allocator: Allocator, parent_idx: u32, name: u32) !u32 {
     // TODO: expensive! maybe we should introduce child_idx?
     for (tree.nodes.items, 0..) |node, idx| {
-        if (node.parent_idx == parent_idx and node.name == name) return @intCast(u32, idx);
+        if (node.parent_idx == parent_idx and node.name == name) return @as(u32, @intCast(idx));
     }
     try tree.nodes.append(allocator, .{ .name = name, .parent_idx = parent_idx });
-    return @intCast(u32, tree.nodes.items.len - 1);
+    return @as(u32, @intCast(tree.nodes.items.len - 1));
 }
 
 /// Returns a pointer to the node at the given index. Pointer invalidation rules are the same as the
@@ -166,7 +166,7 @@ pub fn clearCache(tree: *ArchetypeTree, allocator: Allocator) void {
         tree.buf.clearRetainingCapacity();
 
         // Walk in reverse-order to encounter leafs more frequently, which results in less retries.
-        var i: u32 = @intCast(u32, tree.nodes.items.len - 1);
+        var i: u32 = @as(u32, @intCast(tree.nodes.items.len - 1));
         while (i > 0) : (i -= 1) {
             // If we remove a node, it may be possible to remove parent nodes that now no longer
             // have that node as a dependent.
