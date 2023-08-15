@@ -37,6 +37,7 @@ test "inclusion" {
     std.testing.refAllDeclsRecursive(@import("ArchetypeTree.zig"));
     std.testing.refAllDeclsRecursive(@import("entities.zig"));
     std.testing.refAllDeclsRecursive(@import("query.zig"));
+    std.testing.refAllDeclsRecursive(@import("StringTable.zig"));
     std.testing.refAllDeclsRecursive(@import("systems.zig"));
 }
 
