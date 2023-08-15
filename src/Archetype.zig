@@ -40,6 +40,9 @@ columns: []Column,
 
 component_names: ?*StringTable,
 
+hash: u64,
+next: ?u32 = null,
+
 pub fn Slicer(comptime all_components: anytype) type {
     return struct {
         archetype: *Archetype,

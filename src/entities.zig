@@ -5,7 +5,6 @@ const builtin = @import("builtin");
 const assert = std.debug.assert;
 const query_mod = @import("query.zig");
 const Archetype = @import("Archetype.zig");
-const ArchetypeTree = @import("ArchetypeTree.zig");
 const StringTable = @import("StringTable.zig");
 
 /// An entity ID uniquely identifies an entity globally within an Entities set.
@@ -79,8 +78,12 @@ pub fn Entities(comptime all_components: anytype) type {
         /// stored.
         entities: std.AutoHashMapUnmanaged(EntityID, Pointer) = .{},
 
-        /// A generational tree of archetypes
-        tree: ArchetypeTree,
+        // All archetypes are stored in a bucket. The number of buckets is configurable, and which
+        // bucket an archetype will be stored in is based on the hash of all its columns / component
+        // names.
+        seed: u64 = 0xdeadbeef,
+        buckets: []?u32, // indices into archetypes
+        archetypes: std.ArrayListUnmanaged(Archetype) = .{},
 
         /// Maps component names <-> unique IDs
         component_names: *StringTable,
@@ -92,7 +95,7 @@ pub fn Entities(comptime all_components: anytype) type {
         /// of that table. That is, the entity's component values are stored at:
         ///
         /// ```
-        /// Entities.tree.index(ptr.archetype_index).archetype.?.rows[ptr.row_index]
+        /// Entities.archetypes.items[ptr.archetype_index].rows[ptr.row_index]
         /// ```
         ///
         pub const Pointer = struct {
@@ -105,15 +108,19 @@ pub fn Entities(comptime all_components: anytype) type {
         pub const QueryTag = query_mod.QueryTag;
 
         pub fn init(allocator: Allocator) !Self {
-            // TODO: make capacity configurable
-            var tree = try ArchetypeTree.initCapacity(allocator, 512);
-            errdefer tree.deinit(allocator);
-
             var component_names = try allocator.create(StringTable);
             errdefer allocator.destroy(component_names);
             component_names.* = .{};
 
-            var entities = Self{ .allocator = allocator, .tree = tree, .component_names = component_names };
+            var buckets = try allocator.alloc(?u32, 1024); // TODO: configurable size
+            errdefer allocator.free(buckets);
+            for (buckets) |*b| b.* = null;
+
+            var entities = Self{
+                .allocator = allocator,
+                .component_names = component_names,
+                .buckets = buckets,
+            };
             entities.id_name = try entities.component_names.indexOrPut(allocator, "id");
 
             const columns = try allocator.alloc(Archetype.Column, 1);
@@ -125,20 +132,81 @@ pub fn Entities(comptime all_components: anytype) type {
                 .values = undefined,
             };
 
-            entities.tree.index(0).archetype = .{
+            const archetype_entry = try entities.archetypeOrPut(columns);
+            archetype_entry.ptr.* = .{
                 .len = 0,
                 .capacity = 0,
                 .columns = columns,
                 .component_names = entities.component_names,
+                .hash = archetype_entry.hash,
             };
             return entities;
         }
 
         pub fn deinit(entities: *Self) void {
             entities.entities.deinit(entities.allocator);
-            entities.tree.deinit(entities.allocator);
             entities.component_names.deinit(entities.allocator);
             entities.allocator.destroy(entities.component_names);
+            entities.allocator.free(entities.buckets);
+            for (entities.archetypes.items) |*archetype| archetype.deinit(entities.allocator);
+            entities.archetypes.deinit(entities.allocator);
+        }
+
+        fn archetypeOrPut(
+            entities: *Self,
+            columns: []const Archetype.Column,
+        ) !struct {
+            found_existing: bool,
+            hash: u64,
+            index: u32,
+            ptr: *Archetype,
+        } {
+            var hasher = std.hash.XxHash64.init(entities.seed);
+            for (columns) |column| {
+                hasher.update(std.mem.asBytes(&column.name));
+            }
+            const hash = hasher.final();
+            const bucket_index = hash % entities.buckets.len;
+            if (entities.buckets[bucket_index]) |bucket| {
+                // Bucket already exists
+                const archetype = &entities.archetypes.items[bucket];
+                if (archetype.next) |_| {
+                    // Multiple archetypes in bucket (there were collisions)
+                    while (archetype.next) |collision_index| {
+                        const collision = &entities.archetypes.items[collision_index];
+                        if (collision.hash == hash) {
+                            // Probably a match
+                            // TODO: technically a hash collision could occur here, so maybe check
+                            // column IDs are equal here too?
+                            return .{ .found_existing = true, .hash = hash, .index = collision_index, .ptr = collision };
+                        }
+                    }
+
+                    // New collision
+                    try entities.archetypes.append(entities.allocator, undefined);
+                    const index = entities.archetypes.items.len - 1;
+                    const ptr = &entities.archetypes.items[index];
+                    archetype.next = @intCast(index);
+                    return .{ .found_existing = false, .hash = hash, .index = @intCast(index), .ptr = ptr };
+                } else if (archetype.hash == hash) {
+                    // Exact match
+                    return .{ .found_existing = true, .hash = hash, .index = bucket, .ptr = archetype };
+                }
+
+                // New collision
+                try entities.archetypes.append(entities.allocator, undefined);
+                const index = entities.archetypes.items.len - 1;
+                const ptr = &entities.archetypes.items[index];
+                archetype.next = @intCast(index);
+                return .{ .found_existing = false, .hash = hash, .index = @intCast(index), .ptr = ptr };
+            }
+
+            // Bucket doesn't exist
+            try entities.archetypes.append(entities.allocator, undefined);
+            const index = entities.archetypes.items.len - 1;
+            const ptr = &entities.archetypes.items[index];
+            entities.buckets[bucket_index] = @intCast(index);
+            return .{ .found_existing = false, .hash = hash, .index = @intCast(index), .ptr = ptr };
         }
 
         /// Returns a new entity.
@@ -146,7 +214,19 @@ pub fn Entities(comptime all_components: anytype) type {
             const new_id = entities.counter;
             entities.counter += 1;
 
-            var void_archetype = &entities.tree.index(0).archetype.?;
+            // TODO: could skip this lookup if we store pointer
+            const archetype_entry = try entities.archetypeOrPut(&.{
+                .{
+                    .name = entities.id_name,
+                    .type_id = Archetype.typeId(EntityID),
+                    .size = @sizeOf(EntityID),
+                    .alignment = @alignOf(EntityID),
+                    .values = undefined,
+                },
+            });
+            assert(archetype_entry.found_existing);
+
+            var void_archetype = archetype_entry.ptr;
             const new_row = try void_archetype.append(entities.allocator, .{ .id = new_id });
             const void_pointer = Pointer{
                 .archetype_index = 0, // void archetype is guaranteed to be first index
@@ -182,7 +262,7 @@ pub fn Entities(comptime all_components: anytype) type {
         /// Returns the archetype storage for the given entity.
         pub inline fn archetypeByID(entities: *Self, entity: EntityID) *Archetype {
             const ptr = entities.entities.get(entity).?;
-            return &entities.tree.index(ptr.archetype_index).archetype.?;
+            return &entities.archetypes.items[ptr.archetype_index];
         }
 
         /// Sets the named component to the specified value for the given entity,
@@ -202,11 +282,13 @@ pub fn Entities(comptime all_components: anytype) type {
             const name_id = try entities.component_names.indexOrPut(entities.allocator, name) + 1;
 
             const prev_archetype_idx = entities.entities.get(entity).?.archetype_index;
-            var prev_archetype = &entities.tree.index(prev_archetype_idx).archetype.?;
-            const archetype_idx = try entities.tree.add(entities.allocator, prev_archetype_idx, name_id);
-            const archetype_node = entities.tree.index(archetype_idx);
+            var prev_archetype = &entities.archetypes.items[prev_archetype_idx];
+            var archetype: ?*Archetype = if (prev_archetype.hasComponent(name_id)) prev_archetype else null;
+            var archetype_idx: u32 = if (archetype != null) prev_archetype_idx else 0;
 
-            if (archetype_node.archetype == null) {
+            if (archetype == null) {
+                // TODO: eliminate the need for allocation and sorting here, since this can occur
+                // if an archetype already exists (found_existing case below)
                 const columns = try entities.allocator.alloc(Archetype.Column, prev_archetype.columns.len + 1);
                 std.mem.copy(Archetype.Column, columns, prev_archetype.columns);
                 for (columns) |*column| {
@@ -221,18 +303,26 @@ pub fn Entities(comptime all_components: anytype) type {
                 };
                 std.sort.pdq(Archetype.Column, columns, {}, byTypeId);
 
-                archetype_node.archetype = .{
-                    .len = 0,
-                    .capacity = 0,
-                    .columns = columns,
-                    .component_names = entities.component_names,
-                };
+                const archetype_entry = try entities.archetypeOrPut(columns);
+                if (!archetype_entry.found_existing) {
+                    archetype_entry.ptr.* = .{
+                        .len = 0,
+                        .capacity = 0,
+                        .columns = columns,
+                        .component_names = entities.component_names,
+                        .hash = archetype_entry.hash,
+                    };
+                } else {
+                    entities.allocator.free(columns);
+                }
+                archetype = archetype_entry.ptr;
+                archetype_idx = archetype_entry.index;
             }
 
             // Either new storage (if the entity moved between storage tables due to having a new
             // component) or the prior storage (if the entity already had the component and it's value
             // is merely being updated.)
-            var current_archetype_storage = &archetype_node.archetype.?;
+            var current_archetype_storage = archetype.?;
 
             if (archetype_idx == prev_archetype_idx) {
                 // Update the value of the existing component of the entity.
@@ -313,12 +403,12 @@ pub fn Entities(comptime all_components: anytype) type {
             const name_id = try entities.component_names.indexOrPut(entities.allocator, name) + 1;
 
             const prev_archetype_idx = entities.entities.get(entity).?.archetype_index;
-            var prev_archetype = &entities.tree.index(prev_archetype_idx).archetype.?;
-            const archetype_idx = try entities.tree.remove(entities.allocator, prev_archetype_idx, name_id);
-            const archetype_node = entities.tree.index(archetype_idx);
-            if (prev_archetype_idx == archetype_idx) return;
+            var prev_archetype = &entities.archetypes.items[prev_archetype_idx];
+            var archetype: ?*Archetype = if (prev_archetype.hasComponent(name_id)) prev_archetype else return;
+            var archetype_idx: u32 = if (archetype != null) prev_archetype_idx else 0;
 
-            if (archetype_node.archetype == null) {
+            if (archetype == null) {
+                // TODO: eliminate this allocation in the found_existing case below
                 const columns = try entities.allocator.alloc(Archetype.Column, prev_archetype.columns.len - 1);
                 var i: usize = 0;
                 for (prev_archetype.columns) |old_column| {
@@ -328,15 +418,23 @@ pub fn Entities(comptime all_components: anytype) type {
                     i += 1;
                 }
 
-                archetype_node.archetype = Archetype{
-                    .len = 0,
-                    .capacity = 0,
-                    .columns = columns,
-                    .component_names = entities.component_names,
-                };
+                const archetype_entry = try entities.archetypeOrPut(columns);
+                if (!archetype_entry.found_existing) {
+                    archetype_entry.ptr.* = .{
+                        .len = 0,
+                        .capacity = 0,
+                        .columns = columns,
+                        .component_names = entities.component_names,
+                        .hash = archetype_entry.hash,
+                    };
+                } else {
+                    entities.allocator.free(columns);
+                }
+                archetype = archetype_entry.ptr;
+                archetype_idx = archetype_entry.index;
             }
 
-            var current_archetype_storage = &archetype_node.archetype.?;
+            var current_archetype_storage = archetype.?;
 
             // Copy to all component values for our entity from the old archetype storage (archetype)
             // to the new one (current_archetype_storage).
@@ -418,15 +516,11 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
 
         // TODO: all_components is a superset of queried items, not type-safe.
         pub fn next(iter: *Self) ?Archetype.Slicer(all_components) {
-            var nodes = iter.entities.tree.nodes.items;
-            while (true) {
-                if (iter.index == nodes.len - 1) return null;
-                iter.index += 1;
-                var node = &nodes[iter.index];
-                if (node.archetype) |*archetype| {
-                    if (iter.match(archetype)) return Archetype.Slicer(all_components){ .archetype = archetype };
-                } else continue;
-            }
+            if (iter.index == iter.entities.archetypes.items.len - 1) return null;
+            iter.index += 1;
+            const archetype = &iter.entities.archetypes.items[iter.index];
+            if (iter.match(archetype)) return Archetype.Slicer(all_components){ .archetype = archetype };
+            return null;
         }
 
         pub fn match(iter: *Self, consideration: *Archetype) bool {
@@ -523,20 +617,20 @@ test "example" {
     //
     // Archetype IDs, these are our "table names" - they're just hashes of all the component names
     // within the archetype table.
-    var archetypes = world.tree.nodes.items;
-    try testing.expectEqual(@as(usize, 5), archetypes.len);
-    try testing.expectEqual(@as(u32, 0), archetypes[0].name);
-    try testing.expectEqual(@as(u32, 4), archetypes[1].name);
-    try testing.expectEqual(@as(u32, 14), archetypes[2].name);
-    try testing.expectEqual(@as(u32, 28), archetypes[3].name);
-    try testing.expectEqual(@as(u32, 14), archetypes[4].name);
+    var archetypes = world.archetypes.items;
+    try testing.expectEqual(@as(usize, 4), archetypes.len);
+    // TODO: better table names, based on columns
+    // try testing.expectEqual(@as(u64, 0), archetypes[0].hash);
+    // try testing.expectEqual(@as(u32, 4), archetypes[1].name);
+    // try testing.expectEqual(@as(u32, 14), archetypes[2].name);
+    // try testing.expectEqual(@as(u32, 28), archetypes[3].name);
+    // try testing.expectEqual(@as(u32, 14), archetypes[4].name);
 
     // Number of (living) entities stored in an archetype table.
-    try testing.expectEqual(@as(usize, 1), archetypes[0].archetype.?.len);
-    try testing.expectEqual(@as(usize, 0), archetypes[1].archetype.?.len);
-    try testing.expectEqual(@as(usize, 0), archetypes[2].archetype.?.len);
-    try testing.expectEqual(@as(usize, 1), archetypes[3].archetype.?.len);
-    try testing.expectEqual(@as(usize, 0), archetypes[4].archetype.?.len);
+    try testing.expectEqual(@as(usize, 0), archetypes[0].len);
+    try testing.expectEqual(@as(usize, 0), archetypes[1].len);
+    try testing.expectEqual(@as(usize, 1), archetypes[2].len);
+    try testing.expectEqual(@as(usize, 1), archetypes[3].len);
 
     // Resolve archetype by entity ID and print column names
     var columns = world.archetypeByID(player2).columns;
@@ -602,20 +696,21 @@ test "many entities" {
     }
 
     // Confirm the number of archetypes created
-    var archetypes = world.tree.nodes.items;
+    // TODO: hash
+    var archetypes = world.archetypes.items;
     try testing.expectEqual(@as(usize, 3), archetypes.len);
 
     // Confirm archetypes
-    var columns = archetypes[0].archetype.?.columns;
+    var columns = archetypes[0].columns;
     try testing.expectEqual(@as(usize, 1), columns.len);
     try testing.expectEqualStrings("id", world.component_names.string(columns[0].name));
 
-    columns = archetypes[1].archetype.?.columns;
+    columns = archetypes[1].columns;
     try testing.expectEqual(@as(usize, 2), columns.len);
     try testing.expectEqualStrings("id", world.component_names.string(columns[0].name));
     try testing.expectEqualStrings("game.name", world.component_names.string(columns[1].name - 1));
 
-    columns = archetypes[2].archetype.?.columns;
+    columns = archetypes[2].columns;
     try testing.expectEqual(@as(usize, 3), columns.len);
     try testing.expectEqualStrings("id", world.component_names.string(columns[0].name));
     try testing.expectEqualStrings("game.name", world.component_names.string(columns[1].name - 1));
