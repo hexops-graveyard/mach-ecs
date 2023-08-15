@@ -389,7 +389,7 @@ pub fn Entities(comptime all_components: anytype) type {
             var archetype = entities.archetypeByID(entity);
 
             const ptr = entities.entities.get(entity).?;
-            return archetype.get(entities.allocator, ptr.row_index, name_id, Component);
+            return archetype.get(entities.allocator, ptr.row_index, name_id + 1, Component);
         }
 
         /// Removes the named component from the entity, or noop if it doesn't have such a component.
@@ -516,10 +516,11 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
 
         // TODO: all_components is a superset of queried items, not type-safe.
         pub fn next(iter: *Self) ?Archetype.Slicer(all_components) {
-            if (iter.index == iter.entities.archetypes.items.len - 1) return null;
-            iter.index += 1;
-            const archetype = &iter.entities.archetypes.items[iter.index];
-            if (iter.match(archetype)) return Archetype.Slicer(all_components){ .archetype = archetype };
+            while (iter.index < iter.entities.archetypes.items.len) {
+                const archetype = &iter.entities.archetypes.items[iter.index];
+                iter.index += 1;
+                if (iter.match(archetype)) return Archetype.Slicer(all_components){ .archetype = archetype };
+            }
             return null;
         }
 
