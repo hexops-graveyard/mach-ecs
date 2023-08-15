@@ -87,11 +87,11 @@ test "example" {
     const player1 = try world.newEntity();
     const player2 = try world.newEntity();
     const player3 = try world.newEntity();
-    try physics.set(player1, .id, 1234);
-    try renderer.set(player1, .id, 1234);
+    try physics.set(player1, .id, 1001);
+    try renderer.set(player1, .id, 1001);
 
-    try physics.set(player2, .id, 1234);
-    try physics.set(player3, .id, 1234);
+    try physics.set(player2, .id, 1002);
+    try physics.set(player3, .id, 1003);
 
     //-------------------------------------------------------------------------
     // Querying
@@ -102,13 +102,13 @@ test "example" {
     var archetype = iter.next().?;
     var ids = archetype.slice(.physics, .id);
     try testing.expectEqual(@as(usize, 2), ids.len);
-    try testing.expectEqual(@as(usize, 1234), ids[0]);
-    try testing.expectEqual(@as(usize, 1234), ids[1]);
+    try testing.expectEqual(@as(usize, 1002), ids[0]);
+    try testing.expectEqual(@as(usize, 1003), ids[1]);
 
     archetype = iter.next().?;
     ids = archetype.slice(.physics, .id);
     try testing.expectEqual(@as(usize, 1), ids.len);
-    try testing.expectEqual(@as(usize, 1234), ids[0]);
+    try testing.expectEqual(@as(usize, 1001), ids[0]);
 
     // TODO: can't write @as type here easily due to generic parameter, should be exposed
     // ?Archetype.Slicer(all_components)
