@@ -38,7 +38,7 @@ capacity: u32,
 /// Describes the columns in this table. Each column stores its row values.
 columns: []Column,
 
-component_names: ?*StringTable,
+component_names: *StringTable,
 
 hash: u64,
 next: ?u32 = null,
@@ -61,11 +61,11 @@ pub fn Slicer(comptime all_components: anytype) type {
                 @tagName(component_name),
             );
             if (namespace_name == .entity and component_name == .id) {
-                const name_id = slicer.archetype.component_names.?.index("id").?;
+                const name_id = slicer.archetype.component_names.index("id").?;
                 return slicer.archetype.getColumnValues(std.heap.page_allocator, name_id, Type).?[0..slicer.archetype.len];
             }
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
-            const name_id = slicer.archetype.component_names.?.index(name).? + 1;
+            const name_id = slicer.archetype.component_names.index(name).? + 1;
             return slicer.archetype.getColumnValues(std.heap.page_allocator, name_id, Type).?[0..slicer.archetype.len];
         }
     };
@@ -86,7 +86,7 @@ fn debugValidateRow(storage: *Archetype, gpa: Allocator, row: anytype) void {
                 "unexpected type: ",
                 @typeName(field.type),
                 " expected: ",
-                storage.component_names.?.string(column.name),
+                storage.component_names.string(column.name),
             }) catch |err| @panic(@errorName(err));
             @panic(msg);
         }
@@ -241,7 +241,7 @@ pub fn getColumnValues(storage: *Archetype, gpa: Allocator, name: u32, comptime 
                     "unexpected type: ",
                     @typeName(ColumnType),
                     " expected: ",
-                    storage.component_names.?.string(column.name),
+                    storage.component_names.string(column.name),
                 }) catch |err| @panic(@errorName(err));
                 @panic(msg);
             }
