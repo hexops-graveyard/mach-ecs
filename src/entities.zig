@@ -6,6 +6,7 @@ const assert = std.debug.assert;
 const query_mod = @import("query.zig");
 const Archetype = @import("Archetype.zig");
 const ArchetypeTree = @import("ArchetypeTree.zig");
+const StringTable = @import("StringTable.zig");
 
 /// An entity ID uniquely identifies an entity globally within an Entities set.
 pub const EntityID = u64;
@@ -81,6 +82,9 @@ pub fn Entities(comptime all_components: anytype) type {
         /// A generational tree of archetypes
         tree: ArchetypeTree,
 
+        /// Maps component names <-> unique IDs
+        component_names: StringTable = .{},
+
         const Self = @This();
 
         /// Points to where an entity is stored, specifically in which archetype table and in which row
@@ -126,6 +130,7 @@ pub fn Entities(comptime all_components: anytype) type {
         pub fn deinit(entities: *Self) void {
             entities.entities.deinit(entities.allocator);
             entities.tree.deinit(entities.allocator);
+            entities.component_names.deinit(entities.allocator);
         }
 
         /// Returns a new entity.
@@ -186,12 +191,11 @@ pub fn Entities(comptime all_components: anytype) type {
             ),
         ) !void {
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
+            const name_id = try entities.component_names.indexOrPut(entities.allocator, name) + 1;
 
-            // TODO: use a name set, not hashing, for names.
-            const name_hash = @as(u32, @truncate(std.hash_map.hashString(name)));
             const prev_archetype_idx = entities.entities.get(entity).?.archetype_index;
             var prev_archetype = &entities.tree.index(prev_archetype_idx).archetype.?;
-            const archetype_idx = try entities.tree.add(entities.allocator, prev_archetype_idx, name_hash);
+            const archetype_idx = try entities.tree.add(entities.allocator, prev_archetype_idx, name_id);
             const archetype_node = entities.tree.index(archetype_idx);
 
             if (archetype_node.archetype == null) {
@@ -296,12 +300,11 @@ pub fn Entities(comptime all_components: anytype) type {
             comptime component_name: std.meta.FieldEnum(@TypeOf(@field(all_components, @tagName(namespace_name)))),
         ) !void {
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
+            const name_id = try entities.component_names.indexOrPut(entities.allocator, name) + 1;
 
-            // TODO: use a name set, not hashing, for names.
-            const name_hash = @as(u32, @truncate(std.hash_map.hashString(name)));
             const prev_archetype_idx = entities.entities.get(entity).?.archetype_index;
             var prev_archetype = &entities.tree.index(prev_archetype_idx).archetype.?;
-            const archetype_idx = try entities.tree.remove(entities.allocator, prev_archetype_idx, name_hash);
+            const archetype_idx = try entities.tree.remove(entities.allocator, prev_archetype_idx, name_id);
             const archetype_node = entities.tree.index(archetype_idx);
             if (prev_archetype_idx == archetype_idx) return;
 
@@ -511,10 +514,10 @@ test "example" {
     var archetypes = world.tree.nodes.items;
     try testing.expectEqual(@as(usize, 5), archetypes.len);
     try testing.expectEqual(@as(u32, 0), archetypes[0].name);
-    try testing.expectEqual(@as(u32, 163538855), archetypes[1].name);
-    try testing.expectEqual(@as(u32, 177100276), archetypes[2].name);
-    try testing.expectEqual(@as(u32, 934892538), archetypes[3].name);
-    try testing.expectEqual(@as(u32, 177100276), archetypes[4].name);
+    try testing.expectEqual(@as(u32, 1), archetypes[1].name);
+    try testing.expectEqual(@as(u32, 11), archetypes[2].name);
+    try testing.expectEqual(@as(u32, 25), archetypes[3].name);
+    try testing.expectEqual(@as(u32, 11), archetypes[4].name);
 
     // Number of (living) entities stored in an archetype table.
     try testing.expectEqual(@as(usize, 1), archetypes[0].archetype.?.len);
