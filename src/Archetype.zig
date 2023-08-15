@@ -8,6 +8,7 @@ const Allocator = std.mem.Allocator;
 const testing = std.testing;
 const assert = std.debug.assert;
 const builtin = @import("builtin");
+const StringTable = @import("StringTable.zig");
 
 const Archetype = @This();
 
@@ -21,7 +22,7 @@ pub fn typeId(comptime T: type) usize {
 }
 
 pub const Column = struct {
-    name: []const u8,
+    name: u32,
     type_id: usize,
     size: u32,
     alignment: u16,
@@ -37,9 +38,9 @@ capacity: u32,
 /// Describes the columns in this table. Each column stores its row values.
 columns: []Column,
 
+component_names: ?*StringTable,
+
 pub fn Slicer(comptime all_components: anytype) type {
-    // var ids = archetype.slice(.id);
-    // // var entities = archetype.getColumnValues(allocator, "id", EntityID).?[0..archetype.len];
     return struct {
         archetype: *Archetype,
 
@@ -51,15 +52,18 @@ pub fn Slicer(comptime all_components: anytype) type {
             @field(all_components, @tagName(namespace_name)),
             @tagName(component_name),
         ) {
+            // TODO: no page allocator
             const Type = @field(
                 @field(all_components, @tagName(namespace_name)),
                 @tagName(component_name),
             );
             if (namespace_name == .entity and component_name == .id) {
-                return slicer.archetype.getColumnValues(std.heap.page_allocator, "id", Type).?[0..slicer.archetype.len];
+                const name_id = slicer.archetype.component_names.?.index("id").?;
+                return slicer.archetype.getColumnValues(std.heap.page_allocator, name_id, Type).?[0..slicer.archetype.len];
             }
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
-            return slicer.archetype.getColumnValues(std.heap.page_allocator, name, Type).?[0..slicer.archetype.len];
+            const name_id = slicer.archetype.component_names.?.index(name).? + 1;
+            return slicer.archetype.getColumnValues(std.heap.page_allocator, name_id, Type).?[0..slicer.archetype.len];
         }
     };
 }
@@ -79,7 +83,7 @@ fn debugValidateRow(storage: *Archetype, gpa: Allocator, row: anytype) void {
                 "unexpected type: ",
                 @typeName(field.type),
                 " expected: ",
-                column.name,
+                storage.component_names.?.string(column.name),
             }) catch |err| @panic(@errorName(err));
             @panic(msg);
         }
@@ -164,7 +168,7 @@ pub fn setRow(storage: *Archetype, gpa: Allocator, row_index: u32, row: anytype)
 }
 
 /// Sets the value of the named components (columns) for the given row in the table.
-pub fn set(storage: *Archetype, gpa: Allocator, row_index: u32, name: []const u8, component: anytype) void {
+pub fn set(storage: *Archetype, gpa: Allocator, row_index: u32, name: u32, component: anytype) void {
     assert(storage.len != 0 and storage.len >= row_index);
 
     const ColumnType = @TypeOf(component);
@@ -174,7 +178,7 @@ pub fn set(storage: *Archetype, gpa: Allocator, row_index: u32, name: []const u8
     values[row_index] = component;
 }
 
-pub fn get(storage: *Archetype, gpa: Allocator, row_index: u32, name: []const u8, comptime ColumnType: type) ?ColumnType {
+pub fn get(storage: *Archetype, gpa: Allocator, row_index: u32, name: u32, comptime ColumnType: type) ?ColumnType {
     if (@sizeOf(ColumnType) == 0) return {};
 
     const values = storage.getColumnValues(gpa, name, ColumnType) orelse return null;
@@ -210,31 +214,31 @@ pub fn remove(storage: *Archetype, row_index: u32) void {
 }
 
 /// Tells if this archetype has every one of the given components.
-pub fn hasComponents(storage: *Archetype, components: []const []const u8) bool {
-    for (components) |component_name| {
-        if (!storage.hasComponent(component_name)) return false;
+pub fn hasComponents(storage: *Archetype, names: []const u32) bool {
+    for (names) |name| {
+        if (!storage.hasComponent(name)) return false;
     }
     return true;
 }
 
 /// Tells if this archetype has a component with the specified name.
-pub fn hasComponent(storage: *Archetype, component: []const u8) bool {
+pub fn hasComponent(storage: *Archetype, name: u32) bool {
     for (storage.columns) |column| {
-        if (std.mem.eql(u8, column.name, component)) return true;
+        if (column.name == name) return true;
     }
     return false;
 }
 
-pub fn getColumnValues(storage: *Archetype, gpa: Allocator, name: []const u8, comptime ColumnType: type) ?[]ColumnType {
+pub fn getColumnValues(storage: *Archetype, gpa: Allocator, name: u32, comptime ColumnType: type) ?[]ColumnType {
     for (storage.columns) |*column| {
-        if (!std.mem.eql(u8, column.name, name)) continue;
+        if (column.name != name) continue;
         if (is_debug) {
             if (typeId(ColumnType) != column.type_id) {
                 const msg = std.mem.concat(gpa, u8, &.{
                     "unexpected type: ",
                     @typeName(ColumnType),
                     " expected: ",
-                    column.name,
+                    storage.component_names.?.string(column.name),
                 }) catch |err| @panic(@errorName(err));
                 @panic(msg);
             }
@@ -246,9 +250,9 @@ pub fn getColumnValues(storage: *Archetype, gpa: Allocator, name: []const u8, co
     return null;
 }
 
-pub fn getRawColumnValues(storage: *Archetype, name: []const u8) ?[]u8 {
+pub fn getRawColumnValues(storage: *Archetype, name: u32) ?[]u8 {
     for (storage.columns) |column| {
-        if (!std.mem.eql(u8, column.name, name)) continue;
+        if (column.name != name) continue;
         return column.values;
     }
     return null;

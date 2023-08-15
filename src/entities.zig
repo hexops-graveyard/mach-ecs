@@ -83,7 +83,8 @@ pub fn Entities(comptime all_components: anytype) type {
         tree: ArchetypeTree,
 
         /// Maps component names <-> unique IDs
-        component_names: StringTable = .{},
+        component_names: *StringTable,
+        id_name: u32 = 0,
 
         const Self = @This();
 
@@ -108,11 +109,16 @@ pub fn Entities(comptime all_components: anytype) type {
             var tree = try ArchetypeTree.initCapacity(allocator, 512);
             errdefer tree.deinit(allocator);
 
-            var entities = Self{ .allocator = allocator, .tree = tree };
+            var component_names = try allocator.create(StringTable);
+            errdefer allocator.destroy(component_names);
+            component_names.* = .{};
+
+            var entities = Self{ .allocator = allocator, .tree = tree, .component_names = component_names };
+            entities.id_name = try entities.component_names.indexOrPut(allocator, "id");
 
             const columns = try allocator.alloc(Archetype.Column, 1);
             columns[0] = .{
-                .name = "id",
+                .name = entities.id_name,
                 .type_id = Archetype.typeId(EntityID),
                 .size = @sizeOf(EntityID),
                 .alignment = @alignOf(EntityID),
@@ -123,6 +129,7 @@ pub fn Entities(comptime all_components: anytype) type {
                 .len = 0,
                 .capacity = 0,
                 .columns = columns,
+                .component_names = entities.component_names,
             };
             return entities;
         }
@@ -131,6 +138,7 @@ pub fn Entities(comptime all_components: anytype) type {
             entities.entities.deinit(entities.allocator);
             entities.tree.deinit(entities.allocator);
             entities.component_names.deinit(entities.allocator);
+            entities.allocator.destroy(entities.component_names);
         }
 
         /// Returns a new entity.
@@ -158,7 +166,7 @@ pub fn Entities(comptime all_components: anytype) type {
             // A swap removal will be performed, update the entity stored in the last row of the
             // archetype table to point to the row the entity we are removing is currently located.
             if (archetype.len > 1) {
-                const last_row_entity_id = archetype.get(entities.allocator, archetype.len - 1, "id", EntityID).?;
+                const last_row_entity_id = archetype.get(entities.allocator, archetype.len - 1, entities.id_name, EntityID).?;
                 try entities.entities.put(entities.allocator, last_row_entity_id, Pointer{
                     .archetype_index = ptr.archetype_index,
                     .row_index = ptr.row_index,
@@ -205,7 +213,7 @@ pub fn Entities(comptime all_components: anytype) type {
                     column.values = undefined;
                 }
                 columns[columns.len - 1] = .{
-                    .name = name,
+                    .name = name_id,
                     .type_id = Archetype.typeId(@TypeOf(component)),
                     .size = @sizeOf(@TypeOf(component)),
                     .alignment = if (@sizeOf(@TypeOf(component)) == 0) 1 else @alignOf(@TypeOf(component)),
@@ -217,6 +225,7 @@ pub fn Entities(comptime all_components: anytype) type {
                     .len = 0,
                     .capacity = 0,
                     .columns = columns,
+                    .component_names = entities.component_names,
                 };
             }
 
@@ -228,7 +237,7 @@ pub fn Entities(comptime all_components: anytype) type {
             if (archetype_idx == prev_archetype_idx) {
                 // Update the value of the existing component of the entity.
                 const ptr = entities.entities.get(entity).?;
-                current_archetype_storage.set(entities.allocator, ptr.row_index, name, component);
+                current_archetype_storage.set(entities.allocator, ptr.row_index, name_id, component);
                 return;
             }
 
@@ -238,11 +247,11 @@ pub fn Entities(comptime all_components: anytype) type {
             const old_ptr = entities.entities.get(entity).?;
 
             // Update the storage/columns for all of the existing components on the entity.
-            current_archetype_storage.set(entities.allocator, new_row, "id", entity);
+            current_archetype_storage.set(entities.allocator, new_row, entities.id_name, entity);
             for (prev_archetype.columns) |column| {
-                if (std.mem.eql(u8, column.name, "id")) continue;
+                if (column.name == entities.id_name) continue;
                 for (current_archetype_storage.columns) |corresponding| {
-                    if (std.mem.eql(u8, column.name, corresponding.name)) {
+                    if (column.name == corresponding.name) {
                         const old_value_raw = prev_archetype.getRaw(old_ptr.row_index, column);
                         current_archetype_storage.setRaw(new_row, corresponding, old_value_raw) catch |err| {
                             current_archetype_storage.undoAppend();
@@ -254,10 +263,10 @@ pub fn Entities(comptime all_components: anytype) type {
             }
 
             // Update the storage/column for the new component.
-            current_archetype_storage.set(entities.allocator, new_row, name, component);
+            current_archetype_storage.set(entities.allocator, new_row, name_id, component);
 
             prev_archetype.remove(old_ptr.row_index);
-            const swapped_entity_id = prev_archetype.get(entities.allocator, old_ptr.row_index, "id", EntityID).?;
+            const swapped_entity_id = prev_archetype.get(entities.allocator, old_ptr.row_index, entities.id_name, EntityID).?;
             // TODO: try is wrong here and below?
             // if we removed the last entry from archetype, then swapped_entity_id == entity
             // so the second entities.put will clobber this one
@@ -286,10 +295,11 @@ pub fn Entities(comptime all_components: anytype) type {
                 @tagName(component_name),
             );
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
+            const name_id = entities.component_names.index(name) orelse return null;
             var archetype = entities.archetypeByID(entity);
 
             const ptr = entities.entities.get(entity).?;
-            return archetype.get(entities.allocator, ptr.row_index, name, Component);
+            return archetype.get(entities.allocator, ptr.row_index, name_id, Component);
         }
 
         /// Removes the named component from the entity, or noop if it doesn't have such a component.
@@ -312,7 +322,7 @@ pub fn Entities(comptime all_components: anytype) type {
                 const columns = try entities.allocator.alloc(Archetype.Column, prev_archetype.columns.len - 1);
                 var i: usize = 0;
                 for (prev_archetype.columns) |old_column| {
-                    if (std.mem.eql(u8, old_column.name, name)) continue;
+                    if (old_column.name == name_id) continue;
                     columns[i] = old_column;
                     columns[i].values = undefined;
                     i += 1;
@@ -322,6 +332,7 @@ pub fn Entities(comptime all_components: anytype) type {
                     .len = 0,
                     .capacity = 0,
                     .columns = columns,
+                    .component_names = entities.component_names,
                 };
             }
 
@@ -334,11 +345,11 @@ pub fn Entities(comptime all_components: anytype) type {
 
             // Update the storage/columns for all of the existing components on the entity that exist in
             // the new archetype table (i.e. excluding the component to remove.)
-            current_archetype_storage.set(entities.allocator, new_row, "id", entity);
+            current_archetype_storage.set(entities.allocator, new_row, entities.id_name, entity);
             for (current_archetype_storage.columns) |column| {
-                if (std.mem.eql(u8, column.name, "id")) continue;
+                if (column.name == entities.id_name) continue;
                 for (prev_archetype.columns) |corresponding| {
-                    if (std.mem.eql(u8, column.name, corresponding.name)) {
+                    if (column.name == corresponding.name) {
                         const old_value_raw = prev_archetype.getRaw(old_ptr.row_index, column);
                         current_archetype_storage.setRaw(new_row, column, old_value_raw) catch |err| {
                             current_archetype_storage.undoAppend();
@@ -350,7 +361,7 @@ pub fn Entities(comptime all_components: anytype) type {
             }
 
             prev_archetype.remove(old_ptr.row_index);
-            const swapped_entity_id = prev_archetype.get(entities.allocator, old_ptr.row_index, "id", EntityID).?;
+            const swapped_entity_id = prev_archetype.get(entities.allocator, old_ptr.row_index, entities.id_name, EntityID).?;
             // TODO: try is wrong here and below?
             // if we removed the last entry from archetype, then swapped_entity_id == entity
             // so the second entities.put will clobber this one
@@ -430,9 +441,10 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
                                     const name = switch (component) {
                                         inline else => |c| std.fmt.bufPrint(&buf, "{s}.{s}", .{ @tagName(namespace), @tagName(c) }) catch break,
                                     };
+                                    const name_id = iter.entities.component_names.index(name).? + 1;
                                     var has_column = false;
                                     for (consideration.columns) |column| {
-                                        if (std.mem.eql(u8, name, column.name)) {
+                                        if (column.name == name_id) {
                                             has_column = true;
                                             break;
                                         }
@@ -514,10 +526,10 @@ test "example" {
     var archetypes = world.tree.nodes.items;
     try testing.expectEqual(@as(usize, 5), archetypes.len);
     try testing.expectEqual(@as(u32, 0), archetypes[0].name);
-    try testing.expectEqual(@as(u32, 1), archetypes[1].name);
-    try testing.expectEqual(@as(u32, 11), archetypes[2].name);
-    try testing.expectEqual(@as(u32, 25), archetypes[3].name);
-    try testing.expectEqual(@as(u32, 11), archetypes[4].name);
+    try testing.expectEqual(@as(u32, 4), archetypes[1].name);
+    try testing.expectEqual(@as(u32, 14), archetypes[2].name);
+    try testing.expectEqual(@as(u32, 28), archetypes[3].name);
+    try testing.expectEqual(@as(u32, 14), archetypes[4].name);
 
     // Number of (living) entities stored in an archetype table.
     try testing.expectEqual(@as(usize, 1), archetypes[0].archetype.?.len);
@@ -529,8 +541,8 @@ test "example" {
     // Resolve archetype by entity ID and print column names
     var columns = world.archetypeByID(player2).columns;
     try testing.expectEqual(@as(usize, 2), columns.len);
-    try testing.expectEqualStrings("id", columns[0].name);
-    try testing.expectEqualStrings("game.rotation", columns[1].name);
+    try testing.expectEqualStrings("id", world.component_names.string(columns[0].name));
+    try testing.expectEqualStrings("game.rotation", world.component_names.string(columns[1].name - 1));
 
     //-------------------------------------------------------------------------
     // Query for archetypes that have all of the given components
@@ -596,16 +608,16 @@ test "many entities" {
     // Confirm archetypes
     var columns = archetypes[0].archetype.?.columns;
     try testing.expectEqual(@as(usize, 1), columns.len);
-    try testing.expectEqualStrings("id", columns[0].name);
+    try testing.expectEqualStrings("id", world.component_names.string(columns[0].name));
 
     columns = archetypes[1].archetype.?.columns;
     try testing.expectEqual(@as(usize, 2), columns.len);
-    try testing.expectEqualStrings("id", columns[0].name);
-    try testing.expectEqualStrings("game.name", columns[1].name);
+    try testing.expectEqualStrings("id", world.component_names.string(columns[0].name));
+    try testing.expectEqualStrings("game.name", world.component_names.string(columns[1].name - 1));
 
     columns = archetypes[2].archetype.?.columns;
     try testing.expectEqual(@as(usize, 3), columns.len);
-    try testing.expectEqualStrings("id", columns[0].name);
-    try testing.expectEqualStrings("game.name", columns[1].name);
-    try testing.expectEqualStrings("game.location", columns[2].name);
+    try testing.expectEqualStrings("id", world.component_names.string(columns[0].name));
+    try testing.expectEqualStrings("game.name", world.component_names.string(columns[1].name - 1));
+    try testing.expectEqualStrings("game.location", world.component_names.string(columns[2].name - 1));
 }
