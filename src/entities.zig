@@ -697,7 +697,6 @@ test "many entities" {
     }
 
     // Confirm the number of archetypes created
-    // TODO: hash
     var archetypes = world.archetypes.items;
     try testing.expectEqual(@as(usize, 3), archetypes.len);
 
