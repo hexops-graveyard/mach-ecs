@@ -279,7 +279,7 @@ pub fn Entities(comptime all_components: anytype) type {
             ),
         ) !void {
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
-            const name_id = try entities.component_names.indexOrPut(entities.allocator, name) + 1;
+            const name_id = try entities.component_names.indexOrPut(entities.allocator, name);
 
             const prev_archetype_idx = entities.entities.get(entity).?.archetype_index;
             var prev_archetype = &entities.archetypes.items[prev_archetype_idx];
@@ -389,7 +389,7 @@ pub fn Entities(comptime all_components: anytype) type {
             var archetype = entities.archetypeByID(entity);
 
             const ptr = entities.entities.get(entity).?;
-            return archetype.get(entities.allocator, ptr.row_index, name_id + 1, Component);
+            return archetype.get(entities.allocator, ptr.row_index, name_id, Component);
         }
 
         /// Removes the named component from the entity, or noop if it doesn't have such a component.
@@ -400,7 +400,7 @@ pub fn Entities(comptime all_components: anytype) type {
             comptime component_name: std.meta.FieldEnum(@TypeOf(@field(all_components, @tagName(namespace_name)))),
         ) !void {
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
-            const name_id = try entities.component_names.indexOrPut(entities.allocator, name) + 1;
+            const name_id = try entities.component_names.indexOrPut(entities.allocator, name);
 
             const prev_archetype_idx = entities.entities.get(entity).?.archetype_index;
             var prev_archetype = &entities.archetypes.items[prev_archetype_idx];
@@ -536,7 +536,7 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
                                     const name = switch (component) {
                                         inline else => |c| std.fmt.bufPrint(&buf, "{s}.{s}", .{ @tagName(namespace), @tagName(c) }) catch break,
                                     };
-                                    const name_id = iter.entities.component_names.index(name).? + 1;
+                                    const name_id = iter.entities.component_names.index(name).?;
                                     var has_column = false;
                                     for (consideration.columns) |column| {
                                         if (column.name == name_id) {
@@ -637,7 +637,7 @@ test "example" {
     var columns = world.archetypeByID(player2).columns;
     try testing.expectEqual(@as(usize, 2), columns.len);
     try testing.expectEqualStrings("id", world.component_names.string(columns[0].name));
-    try testing.expectEqualStrings("game.rotation", world.component_names.string(columns[1].name - 1));
+    try testing.expectEqualStrings("game.rotation", world.component_names.string(columns[1].name));
 
     //-------------------------------------------------------------------------
     // Query for archetypes that have all of the given components
@@ -709,11 +709,11 @@ test "many entities" {
     columns = archetypes[1].columns;
     try testing.expectEqual(@as(usize, 2), columns.len);
     try testing.expectEqualStrings("id", world.component_names.string(columns[0].name));
-    try testing.expectEqualStrings("game.name", world.component_names.string(columns[1].name - 1));
+    try testing.expectEqualStrings("game.name", world.component_names.string(columns[1].name));
 
     columns = archetypes[2].columns;
     try testing.expectEqual(@as(usize, 3), columns.len);
     try testing.expectEqualStrings("id", world.component_names.string(columns[0].name));
-    try testing.expectEqualStrings("game.name", world.component_names.string(columns[1].name - 1));
-    try testing.expectEqualStrings("game.location", world.component_names.string(columns[2].name - 1));
+    try testing.expectEqualStrings("game.name", world.component_names.string(columns[1].name));
+    try testing.expectEqualStrings("game.location", world.component_names.string(columns[2].name));
 }

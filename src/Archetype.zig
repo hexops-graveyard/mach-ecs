@@ -65,7 +65,7 @@ pub fn Slicer(comptime all_components: anytype) type {
                 return slicer.archetype.getColumnValues(std.heap.page_allocator, name_id, Type).?[0..slicer.archetype.len];
             }
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
-            const name_id = slicer.archetype.component_names.index(name).? + 1;
+            const name_id = slicer.archetype.component_names.index(name).?;
             return slicer.archetype.getColumnValues(std.heap.page_allocator, name_id, Type).?[0..slicer.archetype.len];
         }
     };
