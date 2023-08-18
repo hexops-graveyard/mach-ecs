@@ -1,5 +1,6 @@
-//! Represents a single archetype, that is, entities which have the same exact set of component
-//! types. When a component is added or removed from an entity, it's archetype changes.
+//! Represents a single archetype. i.e., entities which have a specific set of components. When a
+//! component is added or removed from an entity, it's archetype changes because the archetype is
+//! the set of components an entity has.
 //!
 //! Database equivalent: a table where rows are entities and columns are components (dense storage).
 
@@ -13,28 +14,44 @@ const comp = @import("comptime.zig");
 
 const Archetype = @This();
 
-const is_debug = builtin.mode == .Debug;
-
+/// Describes a single column of the archetype (table); i.e. a single type of component
 pub const Column = struct {
+    /// The unique name of the component this column stores.
     name: StringTable.Index,
+
+    /// A unique identifier for the programming-language type this column stores. In the case of Zig
+    /// this is a comptime type identifier. For other languages, it may be something else or simply
+    /// unused.
     type_id: usize,
+
+    /// The size of the component this column stores.
     size: u32,
+
+    /// The alignment of the component type this column stores.
     alignment: u16,
+
+    /// The actual memory where the values are stored. The length/capacity is Archetype.len and
+    /// Archetype.capacity, as all columns in an Archetype have identical lengths/capacities.
     values: []u8,
 };
 
-/// The length of the table (used number of rows.)
+/// The length of the table (in-use number of rows)
 len: u32,
 
-/// The capacity of the table (allocated number of rows.)
+/// The capacity of the table (total allocated number of rows)
 capacity: u32,
 
-/// Describes the columns in this table. Each column stores its row values.
+/// Describes the columns in this table. Each column stores all rows for that column.
 columns: []Column,
 
+/// A reference to the string table that can be used to identify Column.name's
 component_names: *StringTable,
 
+/// A hash composed of all Column.name's, effectively acting as the unique name of this table.
 hash: u64,
+
+/// An index to Entities.archetypes, used in the event of a *bucket* hash collision (not a collision
+/// of the .hash field) - see Entities.archetypeOrPut for details.
 next: ?u32 = null,
 
 pub fn Slicer(comptime all_components: anytype) type {
@@ -49,7 +66,6 @@ pub fn Slicer(comptime all_components: anytype) type {
             @field(all_components, @tagName(namespace_name)),
             @tagName(component_name),
         ) {
-            // TODO: no page allocator
             const Type = @field(
                 @field(all_components, @tagName(namespace_name)),
                 @tagName(component_name),
