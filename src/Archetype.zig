@@ -73,7 +73,7 @@ pub fn appendUndefined(storage: *Archetype, gpa: Allocator) !u32 {
     return row_index;
 }
 
-// TODO: comptime refactor
+// TODO: comptime: missing a runtime variant of this function
 pub fn append(storage: *Archetype, gpa: Allocator, row: anytype) !u32 {
     comp.debugAssertRowType(storage, row);
 
@@ -127,7 +127,7 @@ pub fn setCapacity(storage: *Archetype, gpa: Allocator, new_capacity: usize) !vo
     storage.capacity = @as(u32, @intCast(new_capacity));
 }
 
-// TODO: comptime refactor
+// TODO: comptime: missing a runtime variant of this function
 /// Sets the entire row's values in the table.
 pub fn setRow(storage: *Archetype, row_index: u32, row: anytype) void {
     comp.debugAssertRowType(storage, row);
@@ -143,7 +143,6 @@ pub fn setRow(storage: *Archetype, row_index: u32, row: anytype) void {
     }
 }
 
-// TODO: comptime refactor
 /// Sets the value of the named components (columns) for the given row in the table.
 pub fn set(storage: *Archetype, row_index: u32, name: StringTable.Index, component: anytype) void {
     const ColumnType = @TypeOf(component);
@@ -157,7 +156,19 @@ pub fn set(storage: *Archetype, row_index: u32, name: StringTable.Index, compone
     );
 }
 
-// TODO: comptime refactor
+pub fn setRaw(storage: *Archetype, row_index: u32, name: StringTable.Index, component: []const u8, alignment: u16) void {
+    if (comp.is_debug) {
+        assert(storage.len != 0 and storage.len >= row_index);
+        assert(storage.columnByName(name).?.size == component.len);
+        assert(storage.columnByName(name).?.alignment == alignment);
+        // TODO: type_id verification
+    }
+
+    const values = storage.getColumnValuesRaw(name) orelse @panic("no such component");
+    const start = component.len * row_index;
+    std.mem.copy(u8, values[start..], component);
+}
+
 pub fn get(storage: *Archetype, row_index: u32, name: StringTable.Index, comptime ColumnType: type) ?ColumnType {
     if (@sizeOf(ColumnType) == 0) return {};
     if (comp.is_debug) comp.debugAssertColumnType(storage, storage.columnByName(name) orelse return null, ColumnType);
@@ -167,7 +178,7 @@ pub fn get(storage: *Archetype, row_index: u32, name: StringTable.Index, comptim
 }
 
 pub fn getRaw(storage: *Archetype, row_index: u32, name: StringTable.Index, size: u32, alignment: u16) ?[]u8 {
-    const values = storage.getColumnValues(name) orelse return null;
+    const values = storage.getColumnValuesRaw(name) orelse return null;
     if (comp.is_debug) {
         assert(storage.columnByName(name).?.size == size);
         assert(storage.columnByName(name).?.alignment == alignment);
@@ -177,19 +188,6 @@ pub fn getRaw(storage: *Archetype, row_index: u32, name: StringTable.Index, size
     const start = size * row_index;
     const end = start + size;
     return values[start..end];
-}
-
-pub fn setRaw(storage: *Archetype, row_index: u32, name: StringTable.Index, component: []const u8, alignment: u16) void {
-    if (comp.is_debug) {
-        assert(storage.len != 0 and storage.len >= row_index);
-        assert(storage.columnByName(name).?.size == component.len);
-        assert(storage.columnByName(name).?.alignment == alignment);
-        // TODO: type_id verification
-    }
-
-    const values = storage.getColumnValues(name) orelse @panic("no such component");
-    const start = component.len * row_index;
-    std.mem.copy(u8, values[start..], component);
 }
 
 /// Swap-removes the specified row with the last row in the table.
@@ -219,7 +217,15 @@ pub fn hasComponent(storage: *Archetype, name: StringTable.Index) bool {
     return storage.columnByName(name) != null;
 }
 
-pub fn getColumnValues(storage: *Archetype, name: StringTable.Index) ?[]u8 {
+pub fn getColumnValues(storage: *Archetype, name: StringTable.Index, comptime ColumnType: type) ?[]ColumnType {
+    const values = storage.getColumnValuesRaw(name) orelse return null;
+    if (comp.is_debug) comp.debugAssertColumnType(storage, storage.columnByName(name).?, ColumnType);
+    var ptr = @as([*]ColumnType, @ptrCast(@alignCast(values.ptr)));
+    const column_values = ptr[0..storage.capacity];
+    return column_values;
+}
+
+pub fn getColumnValuesRaw(storage: *Archetype, name: StringTable.Index) ?[]u8 {
     const column = storage.columnByName(name) orelse return null;
     return column.values;
 }
