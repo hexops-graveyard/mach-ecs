@@ -177,21 +177,27 @@ pub fn set(storage: *Archetype, row_index: u32, name: StringTable.Index, compone
     const ColumnType = @TypeOf(component);
     if (@sizeOf(ColumnType) == 0) return;
     if (comp.is_debug) comp.debugAssertColumnType(storage, storage.columnByName(name).?, @TypeOf(component));
-    storage.setRaw(row_index, name, std.mem.asBytes(&component));
+    storage.setRaw(row_index, name, @as([*]const u8, @ptrCast(&component))[0..@sizeOf(@TypeOf(component))]);
 }
 
 // TODO: comptime refactor
 pub fn get(storage: *Archetype, row_index: u32, name: StringTable.Index, comptime ColumnType: type) ?ColumnType {
     if (@sizeOf(ColumnType) == 0) return {};
+    if (comp.is_debug) comp.debugAssertColumnType(storage, storage.columnByName(name) orelse return null, ColumnType);
 
-    const values = storage.getColumnValues(name, ColumnType) orelse return null;
-    return values[row_index];
+    const bytes = storage.getRaw(row_index, name, @sizeOf(ColumnType)) orelse return null;
+    return @as(*ColumnType, @alignCast(@ptrCast(bytes.ptr))).*;
 }
 
-pub fn getRaw(storage: *Archetype, row_index: u32, column: Column) []u8 {
-    const values = storage.getRawColumnValues(column.name) orelse @panic("getRaw(): no such component");
-    const start = column.size * row_index;
-    const end = start + column.size;
+pub fn getRaw(storage: *Archetype, row_index: u32, name: StringTable.Index, size: u32) ?[]u8 {
+    const values = storage.getRawColumnValues(name) orelse return null;
+    if (comp.is_debug) {
+        assert(storage.columnByName(name).?.size == size);
+        // TODO: type_id verification
+    }
+
+    const start = size * row_index;
+    const end = start + size;
     return values[start..end];
 }
 

@@ -343,7 +343,7 @@ pub fn Entities(comptime all_components: anytype) type {
                 if (column.name == entities.id_name) continue;
                 for (current_archetype_storage.columns) |corresponding| {
                     if (column.name == corresponding.name) {
-                        const old_value_raw = prev_archetype.getRaw(old_ptr.row_index, column);
+                        const old_value_raw = prev_archetype.getRaw(old_ptr.row_index, column.name, column.size).?;
                         current_archetype_storage.setRaw(new_row, corresponding.name, old_value_raw);
                         break;
                     }
@@ -446,7 +446,7 @@ pub fn Entities(comptime all_components: anytype) type {
                 if (column.name == entities.id_name) continue;
                 for (prev_archetype.columns) |corresponding| {
                     if (column.name == corresponding.name) {
-                        const old_value_raw = prev_archetype.getRaw(old_ptr.row_index, column);
+                        const old_value_raw = prev_archetype.getRaw(old_ptr.row_index, column.name, column.size).?;
                         current_archetype_storage.setRaw(new_row, column.name, old_value_raw);
                         break;
                     }
