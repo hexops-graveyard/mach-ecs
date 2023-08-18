@@ -344,10 +344,7 @@ pub fn Entities(comptime all_components: anytype) type {
                 for (current_archetype_storage.columns) |corresponding| {
                     if (column.name == corresponding.name) {
                         const old_value_raw = prev_archetype.getRaw(old_ptr.row_index, column);
-                        current_archetype_storage.setRaw(new_row, corresponding, old_value_raw) catch |err| {
-                            current_archetype_storage.undoAppend();
-                            return err;
-                        };
+                        current_archetype_storage.setRaw(new_row, corresponding.name, old_value_raw);
                         break;
                     }
                 }
@@ -450,10 +447,7 @@ pub fn Entities(comptime all_components: anytype) type {
                 for (prev_archetype.columns) |corresponding| {
                     if (column.name == corresponding.name) {
                         const old_value_raw = prev_archetype.getRaw(old_ptr.row_index, column);
-                        current_archetype_storage.setRaw(new_row, column, old_value_raw) catch |err| {
-                            current_archetype_storage.undoAppend();
-                            return err;
-                        };
+                        current_archetype_storage.setRaw(new_row, column.name, old_value_raw);
                         break;
                     }
                 }

@@ -2,8 +2,9 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 const Archetype = @import("Archetype.zig");
+const StringTable = @import("StringTable.zig");
 
-const is_debug = builtin.mode == .Debug;
+pub const is_debug = builtin.mode == .Debug;
 
 /// Returns a unique comptime usize integer representing the type T. Value will change across
 /// different compilations.
