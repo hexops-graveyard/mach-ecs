@@ -9,17 +9,11 @@ const testing = std.testing;
 const assert = std.debug.assert;
 const builtin = @import("builtin");
 const StringTable = @import("StringTable.zig");
+const comp = @import("comptime.zig");
 
 const Archetype = @This();
 
 const is_debug = builtin.mode == .Debug;
-
-pub fn typeId(comptime T: type) usize {
-    _ = T;
-    return @intFromPtr(&struct {
-        var x: u8 = 0;
-    }.x);
-}
 
 pub const Column = struct {
     name: u32,
@@ -62,11 +56,11 @@ pub fn Slicer(comptime all_components: anytype) type {
             );
             if (namespace_name == .entity and component_name == .id) {
                 const name_id = slicer.archetype.component_names.index("id").?;
-                return slicer.archetype.getColumnValues(std.heap.page_allocator, name_id, Type).?[0..slicer.archetype.len];
+                return slicer.archetype.getColumnValues(name_id, Type).?[0..slicer.archetype.len];
             }
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
             const name_id = slicer.archetype.component_names.index(name).?;
-            return slicer.archetype.getColumnValues(std.heap.page_allocator, name_id, Type).?[0..slicer.archetype.len];
+            return slicer.archetype.getColumnValues(name_id, Type).?[0..slicer.archetype.len];
         }
     };
 }
@@ -81,7 +75,7 @@ pub fn deinit(storage: *Archetype, gpa: Allocator) void {
 fn debugValidateRow(storage: *Archetype, gpa: Allocator, row: anytype) void {
     inline for (std.meta.fields(@TypeOf(row)), 0..) |field, index| {
         const column = storage.columns[index];
-        if (typeId(field.type) != column.type_id) {
+        if (comp.typeId(field.type) != column.type_id) {
             const msg = std.mem.concat(gpa, u8, &.{
                 "unexpected type: ",
                 @typeName(field.type),
@@ -171,20 +165,20 @@ pub fn setRow(storage: *Archetype, gpa: Allocator, row_index: u32, row: anytype)
 }
 
 /// Sets the value of the named components (columns) for the given row in the table.
-pub fn set(storage: *Archetype, gpa: Allocator, row_index: u32, name: u32, component: anytype) void {
+pub fn set(storage: *Archetype, row_index: u32, name: u32, component: anytype) void {
     assert(storage.len != 0 and storage.len >= row_index);
 
     const ColumnType = @TypeOf(component);
     if (@sizeOf(ColumnType) == 0) return;
 
-    const values = storage.getColumnValues(gpa, name, ColumnType) orelse @panic("no such component");
+    const values = storage.getColumnValues(name, ColumnType) orelse @panic("no such component");
     values[row_index] = component;
 }
 
-pub fn get(storage: *Archetype, gpa: Allocator, row_index: u32, name: u32, comptime ColumnType: type) ?ColumnType {
+pub fn get(storage: *Archetype, row_index: u32, name: u32, comptime ColumnType: type) ?ColumnType {
     if (@sizeOf(ColumnType) == 0) return {};
 
-    const values = storage.getColumnValues(gpa, name, ColumnType) orelse return null;
+    const values = storage.getColumnValues(name, ColumnType) orelse return null;
     return values[row_index];
 }
 
@@ -232,20 +226,10 @@ pub fn hasComponent(storage: *Archetype, name: u32) bool {
     return false;
 }
 
-pub fn getColumnValues(storage: *Archetype, gpa: Allocator, name: u32, comptime ColumnType: type) ?[]ColumnType {
+pub fn getColumnValues(storage: *Archetype, name: u32, comptime ColumnType: type) ?[]ColumnType {
     for (storage.columns) |*column| {
         if (column.name != name) continue;
-        if (is_debug) {
-            if (typeId(ColumnType) != column.type_id) {
-                const msg = std.mem.concat(gpa, u8, &.{
-                    "unexpected type: ",
-                    @typeName(ColumnType),
-                    " expected: ",
-                    storage.component_names.string(column.name),
-                }) catch |err| @panic(@errorName(err));
-                @panic(msg);
-            }
-        }
+        comp.debugAssertColumnType(storage, column, ColumnType);
         var ptr = @as([*]ColumnType, @ptrCast(@alignCast(column.values.ptr)));
         const column_values = ptr[0..storage.capacity];
         return column_values;

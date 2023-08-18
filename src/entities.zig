@@ -6,6 +6,7 @@ const assert = std.debug.assert;
 const query_mod = @import("query.zig");
 const Archetype = @import("Archetype.zig");
 const StringTable = @import("StringTable.zig");
+const comp = @import("comptime.zig");
 
 /// An entity ID uniquely identifies an entity globally within an Entities set.
 pub const EntityID = u64;
@@ -126,7 +127,7 @@ pub fn Entities(comptime all_components: anytype) type {
             const columns = try allocator.alloc(Archetype.Column, 1);
             columns[0] = .{
                 .name = entities.id_name,
-                .type_id = Archetype.typeId(EntityID),
+                .type_id = comp.typeId(EntityID),
                 .size = @sizeOf(EntityID),
                 .alignment = @alignOf(EntityID),
                 .values = undefined,
@@ -218,7 +219,7 @@ pub fn Entities(comptime all_components: anytype) type {
             const archetype_entry = try entities.archetypeOrPut(&.{
                 .{
                     .name = entities.id_name,
-                    .type_id = Archetype.typeId(EntityID),
+                    .type_id = comp.typeId(EntityID),
                     .size = @sizeOf(EntityID),
                     .alignment = @alignOf(EntityID),
                     .values = undefined,
@@ -246,7 +247,7 @@ pub fn Entities(comptime all_components: anytype) type {
             // A swap removal will be performed, update the entity stored in the last row of the
             // archetype table to point to the row the entity we are removing is currently located.
             if (archetype.len > 1) {
-                const last_row_entity_id = archetype.get(entities.allocator, archetype.len - 1, entities.id_name, EntityID).?;
+                const last_row_entity_id = archetype.get(archetype.len - 1, entities.id_name, EntityID).?;
                 try entities.entities.put(entities.allocator, last_row_entity_id, Pointer{
                     .archetype_index = ptr.archetype_index,
                     .row_index = ptr.row_index,
@@ -296,7 +297,7 @@ pub fn Entities(comptime all_components: anytype) type {
                 }
                 columns[columns.len - 1] = .{
                     .name = name_id,
-                    .type_id = Archetype.typeId(@TypeOf(component)),
+                    .type_id = comp.typeId(@TypeOf(component)),
                     .size = @sizeOf(@TypeOf(component)),
                     .alignment = if (@sizeOf(@TypeOf(component)) == 0) 1 else @alignOf(@TypeOf(component)),
                     .values = undefined,
@@ -327,7 +328,7 @@ pub fn Entities(comptime all_components: anytype) type {
             if (archetype_idx == prev_archetype_idx) {
                 // Update the value of the existing component of the entity.
                 const ptr = entities.entities.get(entity).?;
-                current_archetype_storage.set(entities.allocator, ptr.row_index, name_id, component);
+                current_archetype_storage.set(ptr.row_index, name_id, component);
                 return;
             }
 
@@ -337,7 +338,7 @@ pub fn Entities(comptime all_components: anytype) type {
             const old_ptr = entities.entities.get(entity).?;
 
             // Update the storage/columns for all of the existing components on the entity.
-            current_archetype_storage.set(entities.allocator, new_row, entities.id_name, entity);
+            current_archetype_storage.set(new_row, entities.id_name, entity);
             for (prev_archetype.columns) |column| {
                 if (column.name == entities.id_name) continue;
                 for (current_archetype_storage.columns) |corresponding| {
@@ -353,10 +354,10 @@ pub fn Entities(comptime all_components: anytype) type {
             }
 
             // Update the storage/column for the new component.
-            current_archetype_storage.set(entities.allocator, new_row, name_id, component);
+            current_archetype_storage.set(new_row, name_id, component);
 
             prev_archetype.remove(old_ptr.row_index);
-            const swapped_entity_id = prev_archetype.get(entities.allocator, old_ptr.row_index, entities.id_name, EntityID).?;
+            const swapped_entity_id = prev_archetype.get(old_ptr.row_index, entities.id_name, EntityID).?;
             // TODO: try is wrong here and below?
             // if we removed the last entry from archetype, then swapped_entity_id == entity
             // so the second entities.put will clobber this one
@@ -389,7 +390,7 @@ pub fn Entities(comptime all_components: anytype) type {
             var archetype = entities.archetypeByID(entity);
 
             const ptr = entities.entities.get(entity).?;
-            return archetype.get(entities.allocator, ptr.row_index, name_id, Component);
+            return archetype.get(ptr.row_index, name_id, Component);
         }
 
         /// Removes the named component from the entity, or noop if it doesn't have such a component.
@@ -443,7 +444,7 @@ pub fn Entities(comptime all_components: anytype) type {
 
             // Update the storage/columns for all of the existing components on the entity that exist in
             // the new archetype table (i.e. excluding the component to remove.)
-            current_archetype_storage.set(entities.allocator, new_row, entities.id_name, entity);
+            current_archetype_storage.set(new_row, entities.id_name, entity);
             for (current_archetype_storage.columns) |column| {
                 if (column.name == entities.id_name) continue;
                 for (prev_archetype.columns) |corresponding| {
@@ -459,7 +460,7 @@ pub fn Entities(comptime all_components: anytype) type {
             }
 
             prev_archetype.remove(old_ptr.row_index);
-            const swapped_entity_id = prev_archetype.get(entities.allocator, old_ptr.row_index, entities.id_name, EntityID).?;
+            const swapped_entity_id = prev_archetype.get(old_ptr.row_index, entities.id_name, EntityID).?;
             // TODO: try is wrong here and below?
             // if we removed the last entry from archetype, then swapped_entity_id == entity
             // so the second entities.put will clobber this one
