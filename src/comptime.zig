@@ -34,3 +34,40 @@ pub inline fn debugAssertRowType(storage: *Archetype, row: anytype) void {
         }
     }
 }
+
+// TODO: comptime refactor
+pub fn ArchetypeSlicer(comptime all_components: anytype) type {
+    return struct {
+        archetype: *Archetype,
+
+        // TODO: comptime refactor
+        fn getColumnValuesTyped(storage: *Archetype, name: StringTable.Index, comptime ColumnType: type) ?[]ColumnType {
+            const values = storage.getColumnValues(name) orelse return null;
+            if (is_debug) debugAssertColumnType(storage, storage.columnByName(name).?, ColumnType);
+            var ptr = @as([*]ColumnType, @ptrCast(@alignCast(values.ptr)));
+            const column_values = ptr[0..storage.capacity];
+            return column_values;
+        }
+
+        pub fn slice(
+            slicer: @This(),
+            comptime namespace_name: std.meta.FieldEnum(@TypeOf(all_components)),
+            comptime component_name: std.meta.FieldEnum(@TypeOf(@field(all_components, @tagName(namespace_name)))),
+        ) []@field(
+            @field(all_components, @tagName(namespace_name)),
+            @tagName(component_name),
+        ) {
+            const Type = @field(
+                @field(all_components, @tagName(namespace_name)),
+                @tagName(component_name),
+            );
+            if (namespace_name == .entity and component_name == .id) {
+                const name_id = slicer.archetype.component_names.index("id").?;
+                return getColumnValuesTyped(slicer.archetype, name_id, Type).?[0..slicer.archetype.len];
+            }
+            const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
+            const name_id = slicer.archetype.component_names.index(name).?;
+            return getColumnValuesTyped(slicer.archetype, name_id, Type).?[0..slicer.archetype.len];
+        }
+    };
+}

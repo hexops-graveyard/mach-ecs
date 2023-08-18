@@ -510,11 +510,11 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
         }
 
         // TODO: all_components is a superset of queried items, not type-safe.
-        pub fn next(iter: *Self) ?Archetype.Slicer(all_components) {
+        pub fn next(iter: *Self) ?comp.ArchetypeSlicer(all_components) {
             while (iter.index < iter.entities.archetypes.items.len) {
                 const archetype = &iter.entities.archetypes.items[iter.index];
                 iter.index += 1;
-                if (iter.match(archetype)) return Archetype.Slicer(all_components){ .archetype = archetype };
+                if (iter.match(archetype)) return comp.ArchetypeSlicer(all_components){ .archetype = archetype };
             }
             return null;
         }

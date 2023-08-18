@@ -57,34 +57,6 @@ hash: u64,
 /// of the .hash field) - see Entities.archetypeOrPut for details.
 next: ?u32 = null,
 
-// TODO: comptime refactor
-pub fn Slicer(comptime all_components: anytype) type {
-    return struct {
-        archetype: *Archetype,
-
-        pub fn slice(
-            slicer: @This(),
-            comptime namespace_name: std.meta.FieldEnum(@TypeOf(all_components)),
-            comptime component_name: std.meta.FieldEnum(@TypeOf(@field(all_components, @tagName(namespace_name)))),
-        ) []@field(
-            @field(all_components, @tagName(namespace_name)),
-            @tagName(component_name),
-        ) {
-            const Type = @field(
-                @field(all_components, @tagName(namespace_name)),
-                @tagName(component_name),
-            );
-            if (namespace_name == .entity and component_name == .id) {
-                const name_id = slicer.archetype.component_names.index("id").?;
-                return slicer.archetype.getColumnValues(name_id, Type).?[0..slicer.archetype.len];
-            }
-            const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
-            const name_id = slicer.archetype.component_names.index(name).?;
-            return slicer.archetype.getColumnValues(name_id, Type).?[0..slicer.archetype.len];
-        }
-    };
-}
-
 pub fn deinit(storage: *Archetype, gpa: Allocator) void {
     if (storage.capacity > 0) {
         for (storage.columns) |column| gpa.free(column.values);
@@ -195,7 +167,7 @@ pub fn get(storage: *Archetype, row_index: u32, name: StringTable.Index, comptim
 }
 
 pub fn getRaw(storage: *Archetype, row_index: u32, name: StringTable.Index, size: u32, alignment: u16) ?[]u8 {
-    const values = storage.getRawColumnValues(name) orelse return null;
+    const values = storage.getColumnValues(name) orelse return null;
     if (comp.is_debug) {
         assert(storage.columnByName(name).?.size == size);
         assert(storage.columnByName(name).?.alignment == alignment);
@@ -215,7 +187,7 @@ pub fn setRaw(storage: *Archetype, row_index: u32, name: StringTable.Index, comp
         // TODO: type_id verification
     }
 
-    const values = storage.getRawColumnValues(name) orelse @panic("no such component");
+    const values = storage.getColumnValues(name) orelse @panic("no such component");
     const start = component.len * row_index;
     std.mem.copy(u8, values[start..], component);
 }
@@ -247,16 +219,7 @@ pub fn hasComponent(storage: *Archetype, name: StringTable.Index) bool {
     return storage.columnByName(name) != null;
 }
 
-// TODO: comptime refactor
-pub fn getColumnValues(storage: *Archetype, name: StringTable.Index, comptime ColumnType: type) ?[]ColumnType {
-    const column = storage.columnByName(name) orelse return null;
-    comp.debugAssertColumnType(storage, column, ColumnType);
-    var ptr = @as([*]ColumnType, @ptrCast(@alignCast(column.values.ptr)));
-    const column_values = ptr[0..storage.capacity];
-    return column_values;
-}
-
-pub fn getRawColumnValues(storage: *Archetype, name: StringTable.Index) ?[]u8 {
+pub fn getColumnValues(storage: *Archetype, name: StringTable.Index) ?[]u8 {
     const column = storage.columnByName(name) orelse return null;
     return column.values;
 }
