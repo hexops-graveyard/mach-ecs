@@ -21,8 +21,11 @@ pub const Column = struct {
 
     /// A unique identifier for the programming-language type this column stores. In the case of Zig
     /// this is a comptime type identifier. For other languages, it may be something else or simply
-    /// unused.
-    type_id: usize,
+    /// zero if unused.
+    ///
+    /// This value need only uniquely identify the column type for the duration of a single build of
+    /// the program.
+    type_id: u32,
 
     /// The size of the component this column stores.
     size: u32,

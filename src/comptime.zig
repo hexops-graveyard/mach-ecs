@@ -7,11 +7,11 @@ const is_debug = builtin.mode == .Debug;
 
 /// Returns a unique comptime usize integer representing the type T. Value will change across
 /// different compilations.
-pub fn typeId(comptime T: type) usize {
+pub fn typeId(comptime T: type) u32 {
     _ = T;
-    return @intFromPtr(&struct {
+    return @truncate(@intFromPtr(&struct {
         var x: u8 = 0;
-    }.x);
+    }.x));
 }
 
 /// Asserts that T matches the type of the column.
