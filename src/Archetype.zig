@@ -16,7 +16,7 @@ const Archetype = @This();
 const is_debug = builtin.mode == .Debug;
 
 pub const Column = struct {
-    name: u32,
+    name: StringTable.Index,
     type_id: usize,
     size: u32,
     alignment: u16,
@@ -150,7 +150,7 @@ pub fn setRow(storage: *Archetype, row_index: u32, row: anytype) void {
 }
 
 /// Sets the value of the named components (columns) for the given row in the table.
-pub fn set(storage: *Archetype, row_index: u32, name: u32, component: anytype) void {
+pub fn set(storage: *Archetype, row_index: u32, name: StringTable.Index, component: anytype) void {
     assert(storage.len != 0 and storage.len >= row_index);
 
     const ColumnType = @TypeOf(component);
@@ -160,7 +160,7 @@ pub fn set(storage: *Archetype, row_index: u32, name: u32, component: anytype) v
     values[row_index] = component;
 }
 
-pub fn get(storage: *Archetype, row_index: u32, name: u32, comptime ColumnType: type) ?ColumnType {
+pub fn get(storage: *Archetype, row_index: u32, name: StringTable.Index, comptime ColumnType: type) ?ColumnType {
     if (@sizeOf(ColumnType) == 0) return {};
 
     const values = storage.getColumnValues(name, ColumnType) orelse return null;
@@ -204,14 +204,14 @@ pub fn hasComponents(storage: *Archetype, names: []const u32) bool {
 }
 
 /// Tells if this archetype has a component with the specified name.
-pub fn hasComponent(storage: *Archetype, name: u32) bool {
+pub fn hasComponent(storage: *Archetype, name: StringTable.Index) bool {
     for (storage.columns) |column| {
         if (column.name == name) return true;
     }
     return false;
 }
 
-pub fn getColumnValues(storage: *Archetype, name: u32, comptime ColumnType: type) ?[]ColumnType {
+pub fn getColumnValues(storage: *Archetype, name: StringTable.Index, comptime ColumnType: type) ?[]ColumnType {
     for (storage.columns) |*column| {
         if (column.name != name) continue;
         comp.debugAssertColumnType(storage, column, ColumnType);
@@ -222,7 +222,7 @@ pub fn getColumnValues(storage: *Archetype, name: u32, comptime ColumnType: type
     return null;
 }
 
-pub fn getRawColumnValues(storage: *Archetype, name: u32) ?[]u8 {
+pub fn getRawColumnValues(storage: *Archetype, name: StringTable.Index) ?[]u8 {
     for (storage.columns) |column| {
         if (column.name != name) continue;
         return column.values;

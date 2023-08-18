@@ -88,7 +88,7 @@ pub fn Entities(comptime all_components: anytype) type {
 
         /// Maps component names <-> unique IDs
         component_names: *StringTable,
-        id_name: u32 = 0,
+        id_name: StringTable.Index = 0,
 
         const Self = @This();
 

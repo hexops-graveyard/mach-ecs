@@ -15,8 +15,10 @@ string_bytes: std.ArrayListUnmanaged(u8) = .{},
 /// Key is string_bytes index.
 string_table: std.HashMapUnmanaged(u32, void, IndexContext, std.hash_map.default_max_load_percentage) = .{},
 
+pub const Index = u32;
+
 /// Returns the index of a string key, if it exists.
-pub fn index(table: *StringTable, key: []const u8) ?u32 {
+pub fn index(table: *StringTable, key: []const u8) ?Index {
     const slice_context: SliceAdapter = .{ .string_bytes = &table.string_bytes };
     const found_entry = table.string_table.getEntryAdapted(key, slice_context);
     if (found_entry) |e| return e.key_ptr.*;
@@ -24,7 +26,7 @@ pub fn index(table: *StringTable, key: []const u8) ?u32 {
 }
 
 /// Returns the index of a string key, inserting if not exists.
-pub fn indexOrPut(table: *StringTable, allocator: std.mem.Allocator, key: []const u8) !u32 {
+pub fn indexOrPut(table: *StringTable, allocator: std.mem.Allocator, key: []const u8) !Index {
     const slice_context: SliceAdapter = .{ .string_bytes = &table.string_bytes };
     const index_context: IndexContext = .{ .string_bytes = &table.string_bytes };
     const entry = try table.string_table.getOrPutContextAdapted(allocator, key, slice_context, index_context);
@@ -37,7 +39,7 @@ pub fn indexOrPut(table: *StringTable, allocator: std.mem.Allocator, key: []cons
 }
 
 /// Returns a null-terminated string given the index
-pub fn string(table: *StringTable, idx: u32) [:0]const u8 {
+pub fn string(table: *StringTable, idx: Index) [:0]const u8 {
     return std.mem.span(@as([*:0]const u8, @ptrCast(table.string_bytes.items.ptr)) + idx);
 }
 
@@ -85,12 +87,12 @@ test {
 
     // "hello" -> index 0
     const hello_index = try table.indexOrPut(gpa, "hello");
-    try std.testing.expectEqual(@as(u32, 0), hello_index);
+    try std.testing.expectEqual(@as(Index, 0), hello_index);
 
-    try std.testing.expectEqual(@as(u32, 6), try table.indexOrPut(gpa, "world"));
-    try std.testing.expectEqual(@as(u32, 12), try table.indexOrPut(gpa, "foo"));
-    try std.testing.expectEqual(@as(u32, 16), try table.indexOrPut(gpa, "bar"));
-    try std.testing.expectEqual(@as(u32, 20), try table.indexOrPut(gpa, "baz"));
+    try std.testing.expectEqual(@as(Index, 6), try table.indexOrPut(gpa, "world"));
+    try std.testing.expectEqual(@as(Index, 12), try table.indexOrPut(gpa, "foo"));
+    try std.testing.expectEqual(@as(Index, 16), try table.indexOrPut(gpa, "bar"));
+    try std.testing.expectEqual(@as(Index, 20), try table.indexOrPut(gpa, "baz"));
 
     // index 0 -> "hello"
     try std.testing.expectEqualStrings("hello", table.string(hello_index));
@@ -99,5 +101,5 @@ test {
     try std.testing.expectEqual(hello_index, table.index("hello").?);
 
     // Lookup "foobar" -> null
-    try std.testing.expectEqual(@as(?u32, null), table.index("foobar"));
+    try std.testing.expectEqual(@as(?Index, null), table.index("foobar"));
 }
