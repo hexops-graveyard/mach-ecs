@@ -72,21 +72,6 @@ pub fn deinit(storage: *Archetype, gpa: Allocator) void {
     gpa.free(storage.columns);
 }
 
-fn debugValidateRow(storage: *Archetype, gpa: Allocator, row: anytype) void {
-    inline for (std.meta.fields(@TypeOf(row)), 0..) |field, index| {
-        const column = storage.columns[index];
-        if (comp.typeId(field.type) != column.type_id) {
-            const msg = std.mem.concat(gpa, u8, &.{
-                "unexpected type: ",
-                @typeName(field.type),
-                " expected: ",
-                storage.component_names.string(column.name),
-            }) catch |err| @panic(@errorName(err));
-            @panic(msg);
-        }
-    }
-}
-
 /// appends a new row to this table, with all undefined values.
 pub fn appendUndefined(storage: *Archetype, gpa: Allocator) !u32 {
     try storage.ensureUnusedCapacity(gpa, 1);
@@ -97,13 +82,13 @@ pub fn appendUndefined(storage: *Archetype, gpa: Allocator) !u32 {
 }
 
 pub fn append(storage: *Archetype, gpa: Allocator, row: anytype) !u32 {
-    if (is_debug) storage.debugValidateRow(gpa, row);
+    comp.debugAssertRowType(storage, row);
 
     try storage.ensureUnusedCapacity(gpa, 1);
     assert(storage.len < storage.capacity);
     storage.len += 1;
 
-    storage.setRow(gpa, storage.len - 1, row);
+    storage.setRow(storage.len - 1, row);
     return storage.len;
 }
 
@@ -150,8 +135,8 @@ pub fn setCapacity(storage: *Archetype, gpa: Allocator, new_capacity: usize) !vo
 }
 
 /// Sets the entire row's values in the table.
-pub fn setRow(storage: *Archetype, gpa: Allocator, row_index: u32, row: anytype) void {
-    if (is_debug) storage.debugValidateRow(gpa, row);
+pub fn setRow(storage: *Archetype, row_index: u32, row: anytype) void {
+    comp.debugAssertRowType(storage, row);
 
     const fields = std.meta.fields(@TypeOf(row));
     inline for (fields, 0..) |field, index| {

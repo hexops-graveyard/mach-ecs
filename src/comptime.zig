@@ -23,3 +23,13 @@ pub inline fn debugAssertColumnType(storage: *Archetype, column: *Archetype.Colu
         });
     }
 }
+
+/// Asserts that a tuple `row` to be e.g. appended to an archetype has values that actually match
+/// all of the columns of the archetype table.
+pub inline fn debugAssertRowType(storage: *Archetype, row: anytype) void {
+    if (is_debug) {
+        inline for (std.meta.fields(@TypeOf(row)), 0..) |field, index| {
+            debugAssertColumnType(storage, &storage.columns[index], field.type);
+        }
+    }
+}
