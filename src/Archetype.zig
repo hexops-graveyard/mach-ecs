@@ -244,30 +244,21 @@ pub fn hasComponents(storage: *Archetype, names: []const u32) bool {
 
 /// Tells if this archetype has a component with the specified name.
 pub fn hasComponent(storage: *Archetype, name: StringTable.Index) bool {
-    for (storage.columns) |column| {
-        if (column.name == name) return true;
-    }
-    return false;
+    return storage.columnByName(name) != null;
 }
 
 // TODO: comptime refactor
 pub fn getColumnValues(storage: *Archetype, name: StringTable.Index, comptime ColumnType: type) ?[]ColumnType {
-    for (storage.columns) |*column| {
-        if (column.name != name) continue;
-        comp.debugAssertColumnType(storage, column, ColumnType);
-        var ptr = @as([*]ColumnType, @ptrCast(@alignCast(column.values.ptr)));
-        const column_values = ptr[0..storage.capacity];
-        return column_values;
-    }
-    return null;
+    const column = storage.columnByName(name) orelse return null;
+    comp.debugAssertColumnType(storage, column, ColumnType);
+    var ptr = @as([*]ColumnType, @ptrCast(@alignCast(column.values.ptr)));
+    const column_values = ptr[0..storage.capacity];
+    return column_values;
 }
 
 pub fn getRawColumnValues(storage: *Archetype, name: StringTable.Index) ?[]u8 {
-    for (storage.columns) |column| {
-        if (column.name != name) continue;
-        return column.values;
-    }
-    return null;
+    const column = storage.columnByName(name) orelse return null;
+    return column.values;
 }
 
 pub inline fn columnByName(storage: *Archetype, name: StringTable.Index) ?*Column {
