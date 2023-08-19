@@ -367,8 +367,10 @@ pub fn Entities(comptime all_components: anytype) type {
             return;
         }
 
-        /// gets the named component of the given type (which must be correct, otherwise undefined
-        /// behavior will occur). Returns null if the component does not exist on the entity.
+        // TODO: setComponentDynamic
+
+        /// Gets the named component of the given type.
+        /// Returns null if the component does not exist on the entity.
         pub fn getComponent(
             entities: *Self,
             entity: EntityID,
@@ -384,10 +386,25 @@ pub fn Entities(comptime all_components: anytype) type {
             );
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
             const name_id = entities.component_names.index(name) orelse return null;
-            var archetype = entities.archetypeByID(entity);
 
+            var archetype = entities.archetypeByID(entity);
             const ptr = entities.entities.get(entity).?;
             return archetype.get(ptr.row_index, name_id, Component);
+        }
+
+        /// Gets the named component of the given type.
+        /// Returns null if the component does not exist on the entity.
+        pub fn getComponentDynamic(
+            entities: *Self,
+            entity: EntityID,
+            name_id: StringTable.Index,
+            size: u32,
+            alignment: u16,
+            type_id: u32,
+        ) []const u8 {
+            var archetype = entities.archetypeByID(entity);
+            const ptr = entities.entities.get(entity).?;
+            return archetype.getDynamic(ptr.row_index, name_id, size, alignment, type_id);
         }
 
         /// Removes the named component from the entity, or noop if it doesn't have such a component.
@@ -481,6 +498,8 @@ pub fn Entities(comptime all_components: anytype) type {
         ) ArchetypeIterator(all_components) {
             return ArchetypeIterator(all_components).init(entities, q);
         }
+
+        // TODO: queryDynamic
 
         // TODO: iteration over all entities
         // TODO: iteration over all entities with components (U, V, ...)
