@@ -159,6 +159,7 @@ pub fn set(storage: *Archetype, row_index: u32, name: StringTable.Index, compone
 
 pub fn setDynamic(storage: *Archetype, row_index: u32, name: StringTable.Index, component: []const u8, alignment: u16, type_id: u32) void {
     if (comp.is_debug) {
+        // TODO: improve error messages
         assert(storage.len != 0 and storage.len >= row_index);
         assert(storage.columnByName(name).?.size == component.len);
         assert(storage.columnByName(name).?.alignment == alignment);
@@ -181,6 +182,7 @@ pub fn get(storage: *Archetype, row_index: u32, name: StringTable.Index, comptim
 pub fn getDynamic(storage: *Archetype, row_index: u32, name: StringTable.Index, size: u32, alignment: u16, type_id: u32) ?[]u8 {
     const values = storage.getColumnValuesRaw(name) orelse return null;
     if (comp.is_debug) {
+        // TODO: improve error messages
         assert(storage.columnByName(name).?.size == size);
         assert(storage.columnByName(name).?.alignment == alignment);
         assert(storage.columnByName(name).?.type_id == type_id);

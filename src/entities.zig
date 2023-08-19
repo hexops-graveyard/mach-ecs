@@ -260,6 +260,15 @@ pub fn Entities(comptime all_components: anytype) type {
             _ = entities.entities.remove(entity);
         }
 
+        /// Given a component name, returns its ID. A new ID is created if needed.
+        ///
+        /// The set of components used is expected to be static for the lifetime of the Entities,
+        /// and as such this function allocates component names but there is no way to release that
+        /// memory until Entities.deinit() is called.
+        pub fn componentName(entities: *Self, name_str: []const u8) StringTable.Index {
+            return entities.component_names.indexOrPut(entities.allocator, name_str) catch @panic("TODO: implement stateful OOM");
+        }
+
         /// Returns the archetype storage for the given entity.
         pub inline fn archetypeByID(entities: *Self, entity: EntityID) *Archetype {
             const ptr = entities.entities.get(entity).?;
@@ -279,8 +288,8 @@ pub fn Entities(comptime all_components: anytype) type {
                 @tagName(component_name),
             ),
         ) !void {
-            const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
-            const name_id = try entities.component_names.indexOrPut(entities.allocator, name);
+            const name_str = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
+            const name_id = try entities.component_names.indexOrPut(entities.allocator, name_str);
 
             const prev_archetype_idx = entities.entities.get(entity).?.archetype_index;
             var prev_archetype = &entities.archetypes.items[prev_archetype_idx];
@@ -367,7 +376,103 @@ pub fn Entities(comptime all_components: anytype) type {
             return;
         }
 
-        // TODO: setComponentDynamic
+        /// Sets the named component to the specified value for the given entity,
+        /// moving the entity from it's current archetype table to the new archetype
+        /// table if required.
+        ///
+        /// For tags, set component.len = 0 and alignment = 1
+        pub fn setComponentDynamic(
+            entities: *Self,
+            entity: EntityID,
+            name_id: StringTable.Index,
+            component: []const u8,
+            alignment: u16,
+            type_id: u32,
+        ) !void {
+            const prev_archetype_idx = entities.entities.get(entity).?.archetype_index;
+            var prev_archetype = &entities.archetypes.items[prev_archetype_idx];
+            var archetype: ?*Archetype = if (prev_archetype.hasComponent(name_id)) prev_archetype else null;
+            var archetype_idx: u32 = if (archetype != null) prev_archetype_idx else 0;
+
+            if (archetype == null) {
+                // TODO: eliminate the need for allocation and sorting here, since this can occur
+                // if an archetype already exists (found_existing case below)
+                const columns = try entities.allocator.alloc(Archetype.Column, prev_archetype.columns.len + 1);
+                std.mem.copy(Archetype.Column, columns, prev_archetype.columns);
+                for (columns) |*column| {
+                    column.values = undefined;
+                }
+                columns[columns.len - 1] = .{
+                    .name = name_id,
+                    .type_id = type_id,
+                    .size = @intCast(component.len),
+                    .alignment = alignment,
+                    .values = undefined,
+                };
+                std.sort.pdq(Archetype.Column, columns, {}, byTypeId);
+
+                const archetype_entry = try entities.archetypeOrPut(columns);
+                if (!archetype_entry.found_existing) {
+                    archetype_entry.ptr.* = .{
+                        .len = 0,
+                        .capacity = 0,
+                        .columns = columns,
+                        .component_names = entities.component_names,
+                        .hash = archetype_entry.hash,
+                    };
+                } else {
+                    entities.allocator.free(columns);
+                }
+                archetype = archetype_entry.ptr;
+                archetype_idx = archetype_entry.index;
+            }
+
+            // Either new storage (if the entity moved between storage tables due to having a new
+            // component) or the prior storage (if the entity already had the component and it's value
+            // is merely being updated.)
+            var current_archetype_storage = archetype.?;
+
+            if (archetype_idx == prev_archetype_idx) {
+                // Update the value of the existing component of the entity.
+                const ptr = entities.entities.get(entity).?;
+                current_archetype_storage.setDynamic(ptr.row_index, name_id, component, alignment, type_id);
+                return;
+            }
+
+            // Copy to all component values for our entity from the old archetype storage (archetype)
+            // to the new one (current_archetype_storage).
+            const new_row = try current_archetype_storage.appendUndefined(entities.allocator);
+            const old_ptr = entities.entities.get(entity).?;
+
+            // Update the storage/columns for all of the existing components on the entity.
+            current_archetype_storage.set(new_row, entities.id_name, entity);
+            for (prev_archetype.columns) |column| {
+                if (column.name == entities.id_name) continue;
+                for (current_archetype_storage.columns) |corresponding| {
+                    if (column.name == corresponding.name) {
+                        const old_value_raw = prev_archetype.getDynamic(old_ptr.row_index, column.name, column.size, column.alignment, column.type_id).?;
+                        current_archetype_storage.setDynamic(new_row, corresponding.name, old_value_raw, corresponding.alignment, corresponding.type_id);
+                        break;
+                    }
+                }
+            }
+
+            // Update the storage/column for the new component.
+            current_archetype_storage.setDynamic(new_row, name_id, component, alignment, type_id);
+
+            prev_archetype.remove(old_ptr.row_index);
+            const swapped_entity_id = prev_archetype.get(old_ptr.row_index, entities.id_name, EntityID).?;
+            // TODO: try is wrong here and below?
+            // if we removed the last entry from archetype, then swapped_entity_id == entity
+            // so the second entities.put will clobber this one
+            try entities.entities.put(entities.allocator, swapped_entity_id, old_ptr);
+
+            try entities.entities.put(entities.allocator, entity, Pointer{
+                .archetype_index = archetype_idx,
+                .row_index = new_row,
+            });
+            return;
+        }
 
         /// Gets the named component of the given type.
         /// Returns null if the component does not exist on the entity.
@@ -384,8 +489,8 @@ pub fn Entities(comptime all_components: anytype) type {
                 @field(all_components, @tagName(namespace_name)),
                 @tagName(component_name),
             );
-            const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
-            const name_id = entities.component_names.index(name) orelse return null;
+            const name_str = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
+            const name_id = entities.component_names.index(name_str) orelse return null;
 
             var archetype = entities.archetypeByID(entity);
             const ptr = entities.entities.get(entity).?;
@@ -394,6 +499,8 @@ pub fn Entities(comptime all_components: anytype) type {
 
         /// Gets the named component of the given type.
         /// Returns null if the component does not exist on the entity.
+        ///
+        /// For tags, set size = 0 and alignment = 1
         pub fn getComponentDynamic(
             entities: *Self,
             entity: EntityID,
@@ -401,7 +508,7 @@ pub fn Entities(comptime all_components: anytype) type {
             size: u32,
             alignment: u16,
             type_id: u32,
-        ) []const u8 {
+        ) ?[]u8 {
             var archetype = entities.archetypeByID(entity);
             const ptr = entities.entities.get(entity).?;
             return archetype.getDynamic(ptr.row_index, name_id, size, alignment, type_id);
@@ -414,8 +521,8 @@ pub fn Entities(comptime all_components: anytype) type {
             comptime namespace_name: std.meta.FieldEnum(@TypeOf(all_components)),
             comptime component_name: std.meta.FieldEnum(@TypeOf(@field(all_components, @tagName(namespace_name)))),
         ) !void {
-            const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
-            const name_id = try entities.component_names.indexOrPut(entities.allocator, name);
+            const name_str = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
+            const name_id = try entities.component_names.indexOrPut(entities.allocator, name_str);
             return entities.removeComponentDynamic(entity, name_id);
         }
 
@@ -577,6 +684,42 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
             }
         }
     };
+}
+
+test {
+    std.testing.refAllDeclsRecursive(Entities(.{}));
+}
+
+// TODO: require "one big registration of components" even when using dynamic API? Would alleviate
+// some of the confusion about using world.componentName, and would perhaps improve GUI editor
+// compatibility in practice.
+test "dynamic" {
+    const allocator = testing.allocator;
+    const asBytes = std.mem.asBytes;
+
+    const Location = struct {
+        x: f32 = 0,
+        y: f32 = 0,
+        z: f32 = 0,
+    };
+
+    const Rotation = struct { degrees: f32 };
+
+    // Create a world.
+    var world = try Entities(.{}).init(allocator);
+    defer world.deinit();
+
+    // Create an entity and add dynamic components.
+    var player1 = try world.new();
+    try world.setComponentDynamic(player1, world.componentName("game.name"), "jane", @alignOf([]const u8), 100);
+    try world.setComponentDynamic(player1, world.componentName("game.name"), "joey", @alignOf([]const u8), 100);
+    try world.setComponentDynamic(player1, world.componentName("game.location"), asBytes(&Location{ .x = 1, .y = 2, .z = 3 }), @alignOf(Location), 101);
+
+    // Get components
+    try testing.expect(world.getComponentDynamic(player1, world.componentName("game.rotation"), @sizeOf(Rotation), @alignOf(Rotation), 102) == null);
+    const loc = world.getComponentDynamic(player1, world.componentName("game.location"), @sizeOf(Location), @alignOf(Location), 101);
+    try testing.expectEqual(Location{ .x = 1, .y = 2, .z = 3 }, std.mem.bytesToValue(Location, @as(*[12]u8, @ptrCast(loc.?.ptr))));
+    try testing.expectEqualStrings(world.getComponentDynamic(player1, world.componentName("game.name"), 4, @alignOf([]const u8), 100).?, "joey");
 }
 
 test "entity ID size" {
