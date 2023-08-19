@@ -399,7 +399,15 @@ pub fn Entities(comptime all_components: anytype) type {
         ) !void {
             const name = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
             const name_id = try entities.component_names.indexOrPut(entities.allocator, name);
+            return entities.removeComponentDynamic(entity, name_id);
+        }
 
+        /// Removes the named component from the entity, or noop if it doesn't have such a component.
+        pub fn removeComponentDynamic(
+            entities: *Self,
+            entity: EntityID,
+            name_id: StringTable.Index,
+        ) !void {
             const prev_archetype_idx = entities.entities.get(entity).?.archetype_index;
             var prev_archetype = &entities.archetypes.items[prev_archetype_idx];
             var archetype: ?*Archetype = if (prev_archetype.hasComponent(name_id)) prev_archetype else return;
