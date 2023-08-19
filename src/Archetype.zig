@@ -148,20 +148,21 @@ pub fn set(storage: *Archetype, row_index: u32, name: StringTable.Index, compone
     const ColumnType = @TypeOf(component);
     if (@sizeOf(ColumnType) == 0) return;
     if (comp.is_debug) comp.debugAssertColumnType(storage, storage.columnByName(name).?, @TypeOf(component));
-    storage.setRaw(
+    storage.setDynamic(
         row_index,
         name,
         @as([*]const u8, @ptrCast(&component))[0..@sizeOf(@TypeOf(component))],
         @alignOf(@TypeOf(component)),
+        comp.typeId(@TypeOf(component)),
     );
 }
 
-pub fn setRaw(storage: *Archetype, row_index: u32, name: StringTable.Index, component: []const u8, alignment: u16) void {
+pub fn setDynamic(storage: *Archetype, row_index: u32, name: StringTable.Index, component: []const u8, alignment: u16, type_id: u32) void {
     if (comp.is_debug) {
         assert(storage.len != 0 and storage.len >= row_index);
         assert(storage.columnByName(name).?.size == component.len);
         assert(storage.columnByName(name).?.alignment == alignment);
-        // TODO: type_id verification
+        assert(storage.columnByName(name).?.type_id == type_id);
     }
 
     const values = storage.getColumnValuesRaw(name) orelse @panic("no such component");
@@ -173,16 +174,16 @@ pub fn get(storage: *Archetype, row_index: u32, name: StringTable.Index, comptim
     if (@sizeOf(ColumnType) == 0) return {};
     if (comp.is_debug) comp.debugAssertColumnType(storage, storage.columnByName(name) orelse return null, ColumnType);
 
-    const bytes = storage.getRaw(row_index, name, @sizeOf(ColumnType), @alignOf(ColumnType)) orelse return null;
+    const bytes = storage.getDynamic(row_index, name, @sizeOf(ColumnType), @alignOf(ColumnType), comp.typeId(ColumnType)) orelse return null;
     return @as(*ColumnType, @alignCast(@ptrCast(bytes.ptr))).*;
 }
 
-pub fn getRaw(storage: *Archetype, row_index: u32, name: StringTable.Index, size: u32, alignment: u16) ?[]u8 {
+pub fn getDynamic(storage: *Archetype, row_index: u32, name: StringTable.Index, size: u32, alignment: u16, type_id: u32) ?[]u8 {
     const values = storage.getColumnValuesRaw(name) orelse return null;
     if (comp.is_debug) {
         assert(storage.columnByName(name).?.size == size);
         assert(storage.columnByName(name).?.alignment == alignment);
-        // TODO: type_id verification
+        assert(storage.columnByName(name).?.type_id == type_id);
     }
 
     const start = size * row_index;

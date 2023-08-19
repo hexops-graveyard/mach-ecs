@@ -343,8 +343,8 @@ pub fn Entities(comptime all_components: anytype) type {
                 if (column.name == entities.id_name) continue;
                 for (current_archetype_storage.columns) |corresponding| {
                     if (column.name == corresponding.name) {
-                        const old_value_raw = prev_archetype.getRaw(old_ptr.row_index, column.name, column.size, column.alignment).?;
-                        current_archetype_storage.setRaw(new_row, corresponding.name, old_value_raw, corresponding.alignment);
+                        const old_value_raw = prev_archetype.getDynamic(old_ptr.row_index, column.name, column.size, column.alignment, column.type_id).?;
+                        current_archetype_storage.setDynamic(new_row, corresponding.name, old_value_raw, corresponding.alignment, corresponding.type_id);
                         break;
                     }
                 }
@@ -446,8 +446,8 @@ pub fn Entities(comptime all_components: anytype) type {
                 if (column.name == entities.id_name) continue;
                 for (prev_archetype.columns) |corresponding| {
                     if (column.name == corresponding.name) {
-                        const old_value_raw = prev_archetype.getRaw(old_ptr.row_index, column.name, column.size, column.alignment).?;
-                        current_archetype_storage.setRaw(new_row, column.name, old_value_raw, column.alignment);
+                        const old_value_raw = prev_archetype.getDynamic(old_ptr.row_index, column.name, column.size, column.alignment, column.type_id).?;
+                        current_archetype_storage.setDynamic(new_row, column.name, old_value_raw, column.alignment, column.type_id);
                         break;
                     }
                 }
