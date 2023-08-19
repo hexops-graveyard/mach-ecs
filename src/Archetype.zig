@@ -151,7 +151,7 @@ pub fn set(storage: *Archetype, row_index: u32, name: StringTable.Index, compone
     storage.setDynamic(
         row_index,
         name,
-        @as([*]const u8, @ptrCast(&component))[0..@sizeOf(@TypeOf(component))],
+        std.mem.asBytes(&component),
         @alignOf(@TypeOf(component)),
         comp.typeId(@TypeOf(component)),
     );
