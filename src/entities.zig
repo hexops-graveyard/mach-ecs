@@ -666,7 +666,7 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
                                     const name = switch (component) {
                                         inline else => |c| std.fmt.bufPrint(&buf, "{s}.{s}", .{ @tagName(namespace), @tagName(c) }) catch break,
                                     };
-                                    const name_id = iter.entities.component_names.index(name).?;
+                                    const name_id = iter.entities.componentName(name);
                                     var has_column = false;
                                     for (consideration.columns) |column| {
                                         if (column.name == name_id) {
