@@ -282,7 +282,7 @@ pub fn Entities(comptime all_components: anytype) type {
             entities: *Self,
             entity: EntityID,
             comptime namespace_name: std.meta.FieldEnum(@TypeOf(all_components)),
-            comptime component_name: std.meta.FieldEnum(@TypeOf(@field(all_components, @tagName(namespace_name)))),
+            comptime component_name: std.meta.DeclEnum(@field(all_components, @tagName(namespace_name))),
             component: @field(
                 @field(all_components, @tagName(namespace_name)),
                 @tagName(component_name),
@@ -480,7 +480,7 @@ pub fn Entities(comptime all_components: anytype) type {
             entities: *Self,
             entity: EntityID,
             comptime namespace_name: std.meta.FieldEnum(@TypeOf(all_components)),
-            comptime component_name: std.meta.FieldEnum(@TypeOf(@field(all_components, @tagName(namespace_name)))),
+            comptime component_name: std.meta.DeclEnum(@field(all_components, @tagName(namespace_name))),
         ) ?@field(
             @field(all_components, @tagName(namespace_name)),
             @tagName(component_name),
@@ -519,7 +519,7 @@ pub fn Entities(comptime all_components: anytype) type {
             entities: *Self,
             entity: EntityID,
             comptime namespace_name: std.meta.FieldEnum(@TypeOf(all_components)),
-            comptime component_name: std.meta.FieldEnum(@TypeOf(@field(all_components, @tagName(namespace_name)))),
+            comptime component_name: std.meta.DeclEnum(@field(all_components, @tagName(namespace_name))),
         ) !void {
             const name_str = @tagName(namespace_name) ++ "." ++ @tagName(component_name);
             const name_id = try entities.component_names.indexOrPut(entities.allocator, name_str);
@@ -662,6 +662,7 @@ pub fn ArchetypeIterator(comptime all_components: anytype) type {
                         switch (namespace) {
                             inline else => |components| {
                                 for (components) |component| {
+                                    if (@typeInfo(@TypeOf(component)).Enum.fields.len == 0) continue;
                                     const name = switch (component) {
                                         inline else => |c| std.fmt.bufPrint(&buf, "{s}.{s}", .{ @tagName(namespace), @tagName(c) }) catch break,
                                     };
@@ -738,13 +739,13 @@ test "example" {
     const Rotation = struct { degrees: f32 };
 
     const all_components = .{
-        .entity = .{
-            .id = EntityID,
+        .entity = struct {
+            pub const id = EntityID;
         },
-        .game = .{
-            .location = Location,
-            .name = []const u8,
-            .rotation = Rotation,
+        .game = struct {
+            pub const location = Location;
+            pub const name = []const u8;
+            pub const rotation = Rotation;
         },
     };
 
@@ -842,13 +843,13 @@ test "many entities" {
     const Rotation = struct { degrees: f32 };
 
     const all_components = .{
-        .entity = .{
-            .id = EntityID,
+        .entity = struct {
+            pub const id = EntityID;
         },
-        .game = .{
-            .location = Location,
-            .name = []const u8,
-            .rotation = Rotation,
+        .game = struct {
+            pub const location = Location;
+            pub const name = []const u8;
+            pub const rotation = Rotation;
         },
     };
 

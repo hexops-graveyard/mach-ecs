@@ -15,7 +15,9 @@ pub fn Query(comptime all_components: anytype) type {
         /// Enum matching a component within a namespace
         /// e.g. `var a: Component(.physics2d) = .location`
         pub fn Component(comptime namespace: Namespace) type {
-            return std.meta.FieldEnum(@TypeOf(@field(all_components, @tagName(namespace))));
+            const components = @field(all_components, @tagName(namespace));
+            if (@typeInfo(components).Struct.decls.len == 0) return enum {};
+            return std.meta.DeclEnum(components);
         }
 
         /// Slice of enums matching a component within a namespace
@@ -64,13 +66,14 @@ test "query" {
     const Rotation = struct { degrees: f32 };
 
     const all_components = .{
-        .game = .{
-            .name = []const u8,
+        .game = struct {
+            pub const name = []const u8;
         },
-        .physics = .{
-            .location = Location,
-            .rotation = Rotation,
+        .physics = struct {
+            pub const location = Location;
+            pub const rotation = Rotation;
         },
+        .renderer = struct {},
     };
 
     const Q = Query(all_components);

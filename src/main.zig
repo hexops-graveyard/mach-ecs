@@ -18,10 +18,8 @@ pub const EntityID = @import("entities.zig").EntityID;
 pub const Entities = @import("entities.zig").Entities;
 pub const Archetype = @import("Archetype.zig");
 
-pub const Module = @import("systems.zig").Module;
-pub const Modules = @import("systems.zig").Modules;
-pub const Messages = @import("systems.zig").Messages;
-pub const MessagesTag = @import("systems.zig").MessagesTag;
+pub const Module = @import("modules.zig").Module;
+pub const Modules = @import("modules.zig").Modules;
 pub const World = @import("systems.zig").World;
 
 // TODO:
@@ -38,6 +36,7 @@ test "inclusion" {
     std.testing.refAllDeclsRecursive(@import("query.zig"));
     std.testing.refAllDeclsRecursive(@import("StringTable.zig"));
     std.testing.refAllDeclsRecursive(@import("systems.zig"));
+    std.testing.refAllDeclsRecursive(@import("modules.zig"));
 }
 
 test "example" {
@@ -47,31 +46,26 @@ test "example" {
         pointer: u8,
 
         pub const name = .physics;
-        pub const components = .{
-            .id = u32,
-        };
-        pub const Message = .{
-            .tick = void,
+        pub const components = struct {
+            pub const id = u32;
         };
 
-        pub fn update(msg: Message) void {
-            switch (msg) {
-                .tick => std.debug.print("\nphysics tick!\n", .{}),
-            }
+        pub fn tick(adapter: anytype) !void {
+            _ = adapter;
         }
     });
 
     const Renderer = Module(struct {
         pub const name = .renderer;
-        pub const components = .{
-            .id = u16,
+        pub const components = struct {
+            pub const id = u16;
         };
     });
 
-    const modules = Modules(.{
+    const modules = .{
         Physics2D,
         Renderer,
-    });
+    };
 
     //-------------------------------------------------------------------------
     // Create a world.

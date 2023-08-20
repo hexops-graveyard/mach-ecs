@@ -43,7 +43,7 @@ pub fn ArchetypeSlicer(comptime all_components: anytype) type {
         pub fn slice(
             slicer: @This(),
             comptime namespace_name: std.meta.FieldEnum(@TypeOf(all_components)),
-            comptime component_name: std.meta.FieldEnum(@TypeOf(@field(all_components, @tagName(namespace_name)))),
+            comptime component_name: std.meta.DeclEnum(@field(all_components, @tagName(namespace_name))),
         ) []@field(
             @field(all_components, @tagName(namespace_name)),
             @tagName(component_name),
