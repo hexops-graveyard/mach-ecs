@@ -73,10 +73,10 @@ test "example" {
     defer world.deinit();
 
     // Initialize module state.
-    var physics = world.mod(.physics);
-    var renderer = world.mod(.renderer);
-    physics.initState(.{ .pointer = 123 });
-    _ = physics.state().pointer; // == 123
+    var physics = &world.mod.physics;
+    var renderer = &world.mod.renderer;
+    physics.state = .{ .pointer = 123 };
+    _ = physics.state.pointer; // == 123
 
     const player1 = try world.newEntity();
     const player2 = try world.newEntity();

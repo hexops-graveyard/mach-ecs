@@ -1,5 +1,6 @@
 const std = @import("std");
 const mem = std.mem;
+const StructField = std.builtin.Type.StructField;
 
 const Entities = @import("entities.zig").Entities;
 const Modules = @import("modules.zig").Modules;
@@ -7,28 +8,19 @@ const EntityID = @import("entities.zig").EntityID;
 
 pub fn World(comptime mods: anytype) type {
     const modules = Modules(mods);
+
     return struct {
         allocator: mem.Allocator,
         entities: Entities(modules.components),
-        state: modules.State,
+        mod: Mods(),
 
         const Self = @This();
 
-        pub fn Module(comptime module_tag: anytype, comptime State: type) type {
+        fn Mod(comptime module_tag: anytype) type {
+            const State = @TypeOf(@field(@as(modules.State, undefined), @tagName(module_tag)));
+            const components = @field(modules.components, @tagName(module_tag));
             return struct {
-                world: *Self,
-
-                const components = @field(modules.components, @tagName(module_tag));
-
-                /// Returns a pointer to the state struct of this module.
-                pub inline fn state(m: @This()) *State {
-                    return &@field(m.world.state, @tagName(module_tag));
-                }
-
-                /// Returns a pointer to the state struct of this module.
-                pub inline fn initState(m: @This(), s: State) void {
-                    m.state().* = s;
-                }
+                state: State,
 
                 /// Sets the named component to the specified value for the given entity,
                 /// moving the entity from it's current archetype table to the new archetype
@@ -39,7 +31,9 @@ pub fn World(comptime mods: anytype) type {
                     comptime component_name: std.meta.DeclEnum(components),
                     component: @field(components, @tagName(component_name)),
                 ) !void {
-                    try m.world.entities.setComponent(entity, module_tag, component_name, component);
+                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const world = @fieldParentPtr(Self, "mod", mod_ptr);
+                    try world.entities.setComponent(entity, module_tag, component_name, component);
                 }
 
                 /// gets the named component of the given type (which must be correct, otherwise undefined
@@ -49,7 +43,9 @@ pub fn World(comptime mods: anytype) type {
                     entity: EntityID,
                     comptime component_name: std.meta.DeclEnum(components),
                 ) ?@field(components, @tagName(component_name)) {
-                    return m.world.entities.getComponent(entity, module_tag, component_name);
+                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const world = @fieldParentPtr(Self, "mod", mod_ptr);
+                    return world.entities.getComponent(entity, module_tag, component_name);
                 }
 
                 /// Removes the named component from the entity, or noop if it doesn't have such a component.
@@ -58,23 +54,39 @@ pub fn World(comptime mods: anytype) type {
                     entity: EntityID,
                     comptime component_name: std.meta.DeclEnum(components),
                 ) !void {
-                    try m.world.entities.removeComponent(entity, module_tag, component_name);
+                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const world = @fieldParentPtr(Self, "mod", mod_ptr);
+                    try world.entities.removeComponent(entity, module_tag, component_name);
                 }
             };
         }
 
-        pub inline fn mod(world: *Self, comptime module_tag: anytype) Self.Module(
-            module_tag,
-            @TypeOf(@field(world.state, @tagName(module_tag))),
-        ) {
-            return .{ .world = world };
+        fn Mods() type {
+            var fields: []const StructField = &[0]StructField{};
+            inline for (modules.modules) |M| {
+                fields = fields ++ [_]std.builtin.Type.StructField{.{
+                    .name = @tagName(M.name),
+                    .type = Mod(M.name),
+                    .default_value = null,
+                    .is_comptime = false,
+                    .alignment = @alignOf(Mod(M.name)),
+                }};
+            }
+            return @Type(.{
+                .Struct = .{
+                    .layout = .Auto,
+                    .is_tuple = false,
+                    .fields = fields,
+                    .decls = &[_]std.builtin.Type.Declaration{},
+                },
+            });
         }
 
         pub fn init(allocator: mem.Allocator) !Self {
             return Self{
                 .allocator = allocator,
                 .entities = try Entities(modules.components).init(allocator),
-                .state = undefined,
+                .mod = undefined,
             };
         }
 
