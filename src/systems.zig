@@ -5,6 +5,7 @@ const StructField = std.builtin.Type.StructField;
 const Entities = @import("entities.zig").Entities;
 const Modules = @import("modules.zig").Modules;
 const EntityID = @import("entities.zig").EntityID;
+const comp = @import("comptime.zig");
 
 pub fn World(comptime mods: anytype) type {
     const modules = Modules(mods);
@@ -16,7 +17,7 @@ pub fn World(comptime mods: anytype) type {
 
         const Self = @This();
 
-        fn Mod(comptime module_tag: anytype) type {
+        pub fn Mod(comptime module_tag: anytype) type {
             const State = @TypeOf(@field(@as(modules.State, undefined), @tagName(module_tag)));
             const components = @field(modules.components, @tagName(module_tag));
             return struct {
@@ -104,10 +105,39 @@ pub fn World(comptime mods: anytype) type {
         /// with their module name. For example, a module named `.ziglibs_imgui` should use event
         /// names like `.ziglibsImguiClick`, `.ziglibsImguiFoobar`.
         pub fn send(world: *Self, comptime msg_tag: anytype) !void {
+            // Check for any module that has a handler function named @tagName(msg_tag) (e.g. `fn init` would match `.init`)
             inline for (modules.modules) |M| {
                 if (@hasDecl(M, @tagName(msg_tag))) {
+                    // Determine which parameters the handler function wants. e.g.:
+                    //
+                    // pub fn init(eng: *mach.Engine) !void
+                    // pub fn init(eng: *mach.Engine, mach: *mach.Mod(.engine)) !void
+                    //
                     const handler = @field(M, @tagName(msg_tag));
-                    try handler(world);
+
+                    // Build a tuple of parameters that we can pass to the function, based on what
+                    // *mach.Mod(.foo) types it expects as arguments.
+                    var params: std.meta.ArgsTuple(@TypeOf(handler)) = undefined;
+                    inline for (@typeInfo(@TypeOf(params)).Struct.fields) |param| {
+                        comptime var found = false;
+                        inline for (@typeInfo(Mods()).Struct.fields) |f| {
+                            if (param.type == *f.type) {
+                                @field(params, param.name) = &@field(world.mod, f.name);
+                                found = true;
+                                break;
+                            } else if (param.type == *Self) {
+                                @field(params, param.name) = world;
+                                found = true;
+                                break;
+                            } else if (param.type == f.type) {
+                                @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ @tagName(msg_tag) ++ " should be *T not T: " ++ @typeName(param.type));
+                            }
+                        }
+                        if (!found) @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ @tagName(msg_tag) ++ " has illegal parameter: " ++ @typeName(param.type));
+                    }
+
+                    // Invoke the handler
+                    try @call(.auto, handler, params);
                 }
             }
         }
