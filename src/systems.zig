@@ -107,38 +107,38 @@ pub fn World(comptime mods: anytype) type {
         pub fn send(world: *Self, comptime msg_tag: anytype) !void {
             // Check for any module that has a handler function named @tagName(msg_tag) (e.g. `fn init` would match `.init`)
             inline for (modules.modules) |M| {
-                if (@hasDecl(M, @tagName(msg_tag))) {
-                    // Determine which parameters the handler function wants. e.g.:
-                    //
-                    // pub fn init(eng: *mach.Engine) !void
-                    // pub fn init(eng: *mach.Engine, mach: *mach.Mod(.engine)) !void
-                    //
-                    const handler = @field(M, @tagName(msg_tag));
+                if (!@hasDecl(M, @tagName(msg_tag))) continue;
 
-                    // Build a tuple of parameters that we can pass to the function, based on what
-                    // *mach.Mod(.foo) types it expects as arguments.
-                    var params: std.meta.ArgsTuple(@TypeOf(handler)) = undefined;
-                    inline for (@typeInfo(@TypeOf(params)).Struct.fields) |param| {
-                        comptime var found = false;
-                        inline for (@typeInfo(Mods()).Struct.fields) |f| {
-                            if (param.type == *f.type) {
-                                @field(params, param.name) = &@field(world.mod, f.name);
-                                found = true;
-                                break;
-                            } else if (param.type == *Self) {
-                                @field(params, param.name) = world;
-                                found = true;
-                                break;
-                            } else if (param.type == f.type) {
-                                @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ @tagName(msg_tag) ++ " should be *T not T: " ++ @typeName(param.type));
-                            }
+                // Determine which parameters the handler function wants. e.g.:
+                //
+                // pub fn init(eng: *mach.Engine) !void
+                // pub fn init(eng: *mach.Engine, mach: *mach.Mod(.engine)) !void
+                //
+                const handler = @field(M, @tagName(msg_tag));
+
+                // Build a tuple of parameters that we can pass to the function, based on what
+                // *mach.Mod(.foo) types it expects as arguments.
+                var params: std.meta.ArgsTuple(@TypeOf(handler)) = undefined;
+                inline for (@typeInfo(@TypeOf(params)).Struct.fields) |param| {
+                    comptime var found = false;
+                    inline for (@typeInfo(Mods()).Struct.fields) |f| {
+                        if (param.type == *f.type) {
+                            @field(params, param.name) = &@field(world.mod, f.name);
+                            found = true;
+                            break;
+                        } else if (param.type == *Self) {
+                            @field(params, param.name) = world;
+                            found = true;
+                            break;
+                        } else if (param.type == f.type) {
+                            @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ @tagName(msg_tag) ++ " should be *T not T: " ++ @typeName(param.type));
                         }
-                        if (!found) @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ @tagName(msg_tag) ++ " has illegal parameter: " ++ @typeName(param.type));
                     }
-
-                    // Invoke the handler
-                    try @call(.auto, handler, params);
+                    if (!found) @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ @tagName(msg_tag) ++ " has illegal parameter: " ++ @typeName(param.type));
                 }
+
+                // Invoke the handler
+                try @call(.auto, handler, params);
             }
         }
 
