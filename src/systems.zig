@@ -59,6 +59,48 @@ pub fn World(comptime mods: anytype) type {
                     const world = @fieldParentPtr(Self, "mod", mod_ptr);
                     try world.entities.removeComponent(entity, module_tag, component_name);
                 }
+
+                fn upper(c: u8) u8 {
+                    return switch (c) {
+                        'a' => 'A',
+                        'b' => 'B',
+                        'c' => 'C',
+                        'd' => 'D',
+                        'e' => 'E',
+                        'f' => 'F',
+                        'g' => 'G',
+                        'h' => 'H',
+                        'i' => 'I',
+                        'j' => 'J',
+                        'k' => 'K',
+                        'l' => 'L',
+                        'm' => 'M',
+                        'n' => 'N',
+                        'o' => 'O',
+                        'p' => 'P',
+                        'q' => 'Q',
+                        'r' => 'R',
+                        's' => 'S',
+                        't' => 'T',
+                        'u' => 'U',
+                        'v' => 'V',
+                        'w' => 'W',
+                        'x' => 'X',
+                        'y' => 'Y',
+                        'z' => 'Z',
+                        else => c,
+                    };
+                }
+
+                pub fn send(m: *@This(), comptime msg_tag: anytype) !void {
+                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const world = @fieldParentPtr(Self, "mod", mod_ptr);
+
+                    // Convert module_tag=.renderer msg_tag=.render to "rendererRender"
+                    const abs_tag = comptime @tagName(module_tag) ++ [1]u8{upper(@tagName(msg_tag)[0])} ++ @tagName(msg_tag)[1..];
+
+                    return world.sendStr(abs_tag);
+                }
             };
         }
 
@@ -105,16 +147,20 @@ pub fn World(comptime mods: anytype) type {
         /// with their module name. For example, a module named `.ziglibs_imgui` should use event
         /// names like `.ziglibsImguiClick`, `.ziglibsImguiFoobar`.
         pub fn send(world: *Self, comptime msg_tag: anytype) !void {
-            // Check for any module that has a handler function named @tagName(msg_tag) (e.g. `fn init` would match `.init`)
+            return world.sendStr(@tagName(msg_tag));
+        }
+
+        pub fn sendStr(world: *Self, comptime msg: anytype) !void {
+            // Check for any module that has a handler function named msg (e.g. `fn init` would match "init")
             inline for (modules.modules) |M| {
-                if (!@hasDecl(M, @tagName(msg_tag))) continue;
+                if (!@hasDecl(M, msg)) continue;
 
                 // Determine which parameters the handler function wants. e.g.:
                 //
                 // pub fn init(eng: *mach.Engine) !void
                 // pub fn init(eng: *mach.Engine, mach: *mach.Mod(.engine)) !void
                 //
-                const handler = @field(M, @tagName(msg_tag));
+                const handler = @field(M, msg);
 
                 // Build a tuple of parameters that we can pass to the function, based on what
                 // *mach.Mod(.foo) types it expects as arguments.
@@ -131,10 +177,10 @@ pub fn World(comptime mods: anytype) type {
                             found = true;
                             break;
                         } else if (param.type == f.type) {
-                            @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ @tagName(msg_tag) ++ " should be *T not T: " ++ @typeName(param.type));
+                            @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ msg ++ " should be *T not T: " ++ @typeName(param.type));
                         }
                     }
-                    if (!found) @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ @tagName(msg_tag) ++ " has illegal parameter: " ++ @typeName(param.type));
+                    if (!found) @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ msg ++ " has illegal parameter: " ++ @typeName(param.type));
                 }
 
                 // Invoke the handler
