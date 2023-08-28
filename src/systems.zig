@@ -22,6 +22,7 @@ pub fn World(comptime mods: anytype) type {
             const components = @field(modules.components, @tagName(module_tag));
             return struct {
                 state: State,
+                entities: *Entities(modules.components),
 
                 /// Sets the named component to the specified value for the given entity,
                 /// moving the entity from it's current archetype table to the new archetype
@@ -101,6 +102,20 @@ pub fn World(comptime mods: anytype) type {
 
                     return world.sendStr(abs_tag);
                 }
+
+                /// Returns a new entity.
+                pub fn newEntity(m: *@This()) !EntityID {
+                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const world = @fieldParentPtr(Self, "mod", mod_ptr);
+                    return world.entities.new();
+                }
+
+                /// Removes an entity.
+                pub fn removeEntity(m: *@This(), entity: EntityID) !void {
+                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const world = @fieldParentPtr(Self, "mod", mod_ptr);
+                    try world.entities.removeEntity(entity);
+                }
             };
         }
 
@@ -169,6 +184,9 @@ pub fn World(comptime mods: anytype) type {
                     comptime var found = false;
                     inline for (@typeInfo(Mods()).Struct.fields) |f| {
                         if (param.type == *f.type) {
+                            // TODO: better initialization place for modules
+                            @field(@field(world.mod, f.name), "entities") = &world.entities;
+
                             @field(params, param.name) = &@field(world.mod, f.name);
                             found = true;
                             break;
@@ -186,16 +204,6 @@ pub fn World(comptime mods: anytype) type {
                 // Invoke the handler
                 try @call(.auto, handler, params);
             }
-        }
-
-        /// Returns a new entity.
-        pub inline fn newEntity(world: *Self) !EntityID {
-            return try world.entities.new();
-        }
-
-        /// Removes an entity.
-        pub inline fn removeEntity(world: *Self, entity: EntityID) !void {
-            try world.entities.removeEntity(entity);
         }
     };
 }
