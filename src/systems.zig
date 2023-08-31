@@ -23,6 +23,7 @@ pub fn World(comptime mods: anytype) type {
             return struct {
                 state: State,
                 entities: *Entities(modules.components),
+                allocator: mem.Allocator,
 
                 /// Sets the named component to the specified value for the given entity,
                 /// moving the entity from it's current archetype table to the new archetype
@@ -97,10 +98,34 @@ pub fn World(comptime mods: anytype) type {
                     const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
                     const world = @fieldParentPtr(Self, "mod", mod_ptr);
 
-                    // Convert module_tag=.renderer msg_tag=.render to "rendererRender"
-                    const abs_tag = comptime @tagName(module_tag) ++ [1]u8{upper(@tagName(msg_tag)[0])} ++ @tagName(msg_tag)[1..];
-
-                    return world.sendStr(abs_tag);
+                    // Convert module_tag=.engine_renderer msg_tag=.render_now to "engineRendererRenderNow"
+                    comptime var str: []const u8 = "";
+                    comptime {
+                        var next_upper = false;
+                        inline for (@tagName(module_tag)) |c| {
+                            if (c == '_') {
+                                next_upper = true;
+                            } else if (next_upper) {
+                                str = str ++ [1]u8{upper(c)};
+                                next_upper = false;
+                            } else {
+                                str = str ++ [1]u8{c};
+                            }
+                        }
+                        next_upper = true;
+                        inline for (@tagName(msg_tag)) |c| {
+                            if (c == '_') {
+                                next_upper = true;
+                            } else if (next_upper) {
+                                str = str ++ [1]u8{upper(c)};
+                                next_upper = false;
+                            } else {
+                                str = str ++ [1]u8{c};
+                            }
+                        }
+                    }
+                    std.debug.print("sendStr: {s}\n", .{str});
+                    return world.sendStr(str);
                 }
 
                 /// Returns a new entity.
@@ -186,6 +211,7 @@ pub fn World(comptime mods: anytype) type {
                         if (param.type == *f.type) {
                             // TODO: better initialization place for modules
                             @field(@field(world.mod, f.name), "entities") = &world.entities;
+                            @field(@field(world.mod, f.name), "allocator") = world.allocator;
 
                             @field(params, param.name) = &@field(world.mod, f.name);
                             found = true;
