@@ -42,7 +42,9 @@ test "inclusion" {
 test "example" {
     const allocator = testing.allocator;
 
-    const Physics2D = Module(struct {
+    comptime var Renderer = type;
+    comptime var Physics = type;
+    Physics = Module(struct {
         pointer: u8,
 
         pub const name = .physics;
@@ -50,26 +52,29 @@ test "example" {
             pub const id = u32;
         };
 
-        pub fn tick(adapter: anytype) !void {
-            _ = adapter;
+        pub fn tick(physics: *World(.{ Renderer, Physics }).Mod(.physics)) !void {
+            _ = physics;
         }
     });
 
-    const Renderer = Module(struct {
+    Renderer = Module(struct {
         pub const name = .renderer;
         pub const components = struct {
             pub const id = u16;
         };
-    });
 
-    const modules = .{
-        Physics2D,
-        Renderer,
-    };
+        pub fn tick(
+            physics: *World(.{ Renderer, Physics }).Mod(.physics),
+            renderer: *World(.{ Renderer, Physics }).Mod(.renderer),
+        ) !void {
+            _ = renderer;
+            _ = physics;
+        }
+    });
 
     //-------------------------------------------------------------------------
     // Create a world.
-    var world = try World(modules).init(allocator);
+    var world = try World(.{ Renderer, Physics }).init(allocator);
     defer world.deinit();
 
     // Initialize module state.
@@ -78,9 +83,9 @@ test "example" {
     physics.state = .{ .pointer = 123 };
     _ = physics.state.pointer; // == 123
 
-    const player1 = try world.newEntity();
-    const player2 = try world.newEntity();
-    const player3 = try world.newEntity();
+    const player1 = try physics.newEntity();
+    const player2 = try physics.newEntity();
+    const player3 = try physics.newEntity();
     try physics.set(player1, .id, 1001);
     try renderer.set(player1, .id, 1001);
 

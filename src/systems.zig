@@ -124,7 +124,6 @@ pub fn World(comptime mods: anytype) type {
                             }
                         }
                     }
-                    std.debug.print("sendStr: {s}\n", .{str});
                     return world.sendStr(str);
                 }
 

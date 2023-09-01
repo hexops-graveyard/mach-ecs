@@ -97,7 +97,7 @@ test "module" {
         pointer: usize,
 
         // Globally unique module name
-        pub const name = .mach_physics;
+        pub const name = .engine_physics;
 
         /// Physics module components
         pub const components = struct {
@@ -117,7 +117,7 @@ test "modules" {
         pointer: usize,
 
         // Globally unique module name
-        pub const name = .mach_physics;
+        pub const name = .engine_physics;
 
         /// Physics module components
         pub const components = struct {
@@ -131,7 +131,7 @@ test "modules" {
     });
 
     const Renderer = Module(struct {
-        pub const name = .mach_renderer;
+        pub const name = .engine_renderer;
 
         /// Renderer module components
         pub const components = struct {};
@@ -142,7 +142,7 @@ test "modules" {
     });
 
     const Sprite2D = Module(struct {
-        pub const name = .mach_sprite2d;
+        pub const name = .engine_sprite2d;
     });
 
     const modules = Modules(.{
@@ -156,8 +156,8 @@ test "modules" {
     testing.refAllDeclsRecursive(Sprite2D);
 
     // access namespaced components
-    try testing.expectEqual(Physics.components.location, modules.components.mach_physics.location);
-    try testing.expectEqual(Renderer.components, modules.components.mach_renderer);
+    try testing.expectEqual(Physics.components.location, modules.components.engine_physics.location);
+    try testing.expectEqual(Renderer.components, modules.components.engine_renderer);
 
     // implicitly generated
     _ = modules.components.entity.id;
