@@ -94,7 +94,7 @@ pub fn World(comptime mods: anytype) type {
                     };
                 }
 
-                pub fn send(m: *@This(), comptime msg_tag: anytype) !void {
+                pub fn send(m: *@This(), comptime msg_tag: anytype, args: anytype) !void {
                     const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
                     const world = @fieldParentPtr(Self, "mod", mod_ptr);
 
@@ -124,7 +124,7 @@ pub fn World(comptime mods: anytype) type {
                             }
                         }
                     }
-                    return world.sendStr(str);
+                    return world.sendStr(str, args);
                 }
 
                 /// Returns a new entity.
@@ -185,11 +185,11 @@ pub fn World(comptime mods: anytype) type {
         /// name conflicts, events sent by modules provided by a library should prefix their events
         /// with their module name. For example, a module named `.ziglibs_imgui` should use event
         /// names like `.ziglibsImguiClick`, `.ziglibsImguiFoobar`.
-        pub fn send(world: *Self, comptime msg_tag: anytype) !void {
-            return world.sendStr(@tagName(msg_tag));
+        pub fn send(world: *Self, comptime msg_tag: anytype, args: anytype) !void {
+            return world.sendStr(@tagName(msg_tag), args);
         }
 
-        pub fn sendStr(world: *Self, comptime msg: anytype) !void {
+        pub fn sendStr(world: *Self, comptime msg: anytype, args: anytype) !void {
             // Check for any module that has a handler function named msg (e.g. `fn init` would match "init")
             inline for (modules.modules) |M| {
                 if (!@hasDecl(M, msg)) continue;
@@ -204,6 +204,7 @@ pub fn World(comptime mods: anytype) type {
                 // Build a tuple of parameters that we can pass to the function, based on what
                 // *mach.Mod(.foo) types it expects as arguments.
                 var params: std.meta.ArgsTuple(@TypeOf(handler)) = undefined;
+                comptime var argIndex = 0;
                 inline for (@typeInfo(@TypeOf(params)).Struct.fields) |param| {
                     comptime var found = false;
                     inline for (@typeInfo(Mods()).Struct.fields) |f| {
@@ -223,7 +224,10 @@ pub fn World(comptime mods: anytype) type {
                             @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ msg ++ " should be *T not T: " ++ @typeName(param.type));
                         }
                     }
-                    if (!found) @compileError("Module handler " ++ @tagName(M.name) ++ "." ++ msg ++ " has illegal parameter: " ++ @typeName(param.type));
+                    if (!found) {
+                        @field(params, param.name) = args[argIndex];
+                        argIndex += 1;
+                    }
                 }
 
                 // Invoke the handler
