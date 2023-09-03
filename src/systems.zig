@@ -34,7 +34,7 @@ pub fn World(comptime mods: anytype) type {
                     comptime component_name: std.meta.DeclEnum(components),
                     component: @field(components, @tagName(component_name)),
                 ) !void {
-                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const mod_ptr: *Self.Mods() = @alignCast(@fieldParentPtr(Mods(), @tagName(module_tag), m));
                     const world = @fieldParentPtr(Self, "mod", mod_ptr);
                     try world.entities.setComponent(entity, module_tag, component_name, component);
                 }
@@ -46,7 +46,7 @@ pub fn World(comptime mods: anytype) type {
                     entity: EntityID,
                     comptime component_name: std.meta.DeclEnum(components),
                 ) ?@field(components, @tagName(component_name)) {
-                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const mod_ptr: *Self.Mods() = @alignCast(@fieldParentPtr(Mods(), @tagName(module_tag), m));
                     const world = @fieldParentPtr(Self, "mod", mod_ptr);
                     return world.entities.getComponent(entity, module_tag, component_name);
                 }
@@ -57,7 +57,7 @@ pub fn World(comptime mods: anytype) type {
                     entity: EntityID,
                     comptime component_name: std.meta.DeclEnum(components),
                 ) !void {
-                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const mod_ptr: *Self.Mods() = @alignCast(@fieldParentPtr(Mods(), @tagName(module_tag), m));
                     const world = @fieldParentPtr(Self, "mod", mod_ptr);
                     try world.entities.removeComponent(entity, module_tag, component_name);
                 }
@@ -95,7 +95,7 @@ pub fn World(comptime mods: anytype) type {
                 }
 
                 pub fn send(m: *@This(), comptime msg_tag: anytype, args: anytype) !void {
-                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const mod_ptr: *Self.Mods() = @alignCast(@fieldParentPtr(Mods(), @tagName(module_tag), m));
                     const world = @fieldParentPtr(Self, "mod", mod_ptr);
 
                     // Convert module_tag=.engine_renderer msg_tag=.render_now to "engineRendererRenderNow"
@@ -129,14 +129,14 @@ pub fn World(comptime mods: anytype) type {
 
                 /// Returns a new entity.
                 pub fn newEntity(m: *@This()) !EntityID {
-                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const mod_ptr: *Self.Mods() = @alignCast(@fieldParentPtr(Mods(), @tagName(module_tag), m));
                     const world = @fieldParentPtr(Self, "mod", mod_ptr);
                     return world.entities.new();
                 }
 
                 /// Removes an entity.
                 pub fn removeEntity(m: *@This(), entity: EntityID) !void {
-                    const mod_ptr = @fieldParentPtr(Mods(), @tagName(module_tag), m);
+                    const mod_ptr: *Self.Mods() = @alignCast(@fieldParentPtr(Mods(), @tagName(module_tag), m));
                     const world = @fieldParentPtr(Self, "mod", mod_ptr);
                     try world.entities.removeEntity(entity);
                 }
