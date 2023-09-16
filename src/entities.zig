@@ -363,11 +363,10 @@ pub fn Entities(comptime all_components: anytype) type {
             current_archetype_storage.set(new_row, name_id, component);
 
             prev_archetype.remove(old_ptr.row_index);
-            const swapped_entity_id = prev_archetype.get(old_ptr.row_index, entities.id_name, EntityID).?;
-            // TODO: try is wrong here and below?
-            // if we removed the last entry from archetype, then swapped_entity_id == entity
-            // so the second entities.put will clobber this one
-            try entities.entities.put(entities.allocator, swapped_entity_id, old_ptr);
+            if (prev_archetype.len > 0) {
+                const swapped_entity_id = prev_archetype.get(old_ptr.row_index, entities.id_name, EntityID).?;
+                try entities.entities.put(entities.allocator, swapped_entity_id, old_ptr);
+            }
 
             try entities.entities.put(entities.allocator, entity, Pointer{
                 .archetype_index = archetype_idx,
@@ -461,11 +460,10 @@ pub fn Entities(comptime all_components: anytype) type {
             current_archetype_storage.setDynamic(new_row, name_id, component, alignment, type_id);
 
             prev_archetype.remove(old_ptr.row_index);
-            const swapped_entity_id = prev_archetype.get(old_ptr.row_index, entities.id_name, EntityID).?;
-            // TODO: try is wrong here and below?
-            // if we removed the last entry from archetype, then swapped_entity_id == entity
-            // so the second entities.put will clobber this one
-            try entities.entities.put(entities.allocator, swapped_entity_id, old_ptr);
+            if (prev_archetype.len > 0) {
+                const swapped_entity_id = prev_archetype.get(old_ptr.row_index, entities.id_name, EntityID).?;
+                try entities.entities.put(entities.allocator, swapped_entity_id, old_ptr);
+            }
 
             try entities.entities.put(entities.allocator, entity, Pointer{
                 .archetype_index = archetype_idx,
@@ -586,11 +584,10 @@ pub fn Entities(comptime all_components: anytype) type {
             }
 
             prev_archetype.remove(old_ptr.row_index);
-            const swapped_entity_id = prev_archetype.get(old_ptr.row_index, entities.id_name, EntityID).?;
-            // TODO: try is wrong here and below?
-            // if we removed the last entry from archetype, then swapped_entity_id == entity
-            // so the second entities.put will clobber this one
-            try entities.entities.put(entities.allocator, swapped_entity_id, old_ptr);
+            if (prev_archetype.len > 0) {
+                const swapped_entity_id = prev_archetype.get(old_ptr.row_index, entities.id_name, EntityID).?;
+                try entities.entities.put(entities.allocator, swapped_entity_id, old_ptr);
+            }
 
             try entities.entities.put(entities.allocator, entity, Pointer{
                 .archetype_index = archetype_idx,
