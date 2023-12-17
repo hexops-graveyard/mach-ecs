@@ -97,34 +97,7 @@ pub fn World(comptime mods: anytype) type {
                 pub fn send(m: *@This(), comptime msg_tag: anytype, args: anytype) !void {
                     const mod_ptr: *Self.Mods() = @alignCast(@fieldParentPtr(Mods(), @tagName(module_tag), m));
                     const world = @fieldParentPtr(Self, "mod", mod_ptr);
-
-                    // Convert module_tag=.engine_renderer msg_tag=.render_now to "engineRendererRenderNow"
-                    comptime var str: []const u8 = "";
-                    comptime {
-                        var next_upper = false;
-                        inline for (@tagName(module_tag)) |c| {
-                            if (c == '_') {
-                                next_upper = true;
-                            } else if (next_upper) {
-                                str = str ++ [1]u8{upper(c)};
-                                next_upper = false;
-                            } else {
-                                str = str ++ [1]u8{c};
-                            }
-                        }
-                        next_upper = true;
-                        inline for (@tagName(msg_tag)) |c| {
-                            if (c == '_') {
-                                next_upper = true;
-                            } else if (next_upper) {
-                                str = str ++ [1]u8{upper(c)};
-                                next_upper = false;
-                            } else {
-                                str = str ++ [1]u8{c};
-                            }
-                        }
-                    }
-                    return world.sendStr(str, args);
+                    return world.sendStr(module_tag, @tagName(msg_tag), args);
                 }
 
                 /// Returns a new entity.
@@ -185,21 +158,41 @@ pub fn World(comptime mods: anytype) type {
         /// name conflicts, events sent by modules provided by a library should prefix their events
         /// with their module name. For example, a module named `.ziglibs_imgui` should use event
         /// names like `.ziglibsImguiClick`, `.ziglibsImguiFoobar`.
-        pub fn send(world: *Self, comptime msg_tag: anytype, args: anytype) !void {
-            return world.sendStr(@tagName(msg_tag), args);
+        pub fn send(world: *Self, comptime optional_module_tag: anytype, comptime msg_tag: anytype, args: anytype) !void {
+            return world.sendStr(optional_module_tag, @tagName(msg_tag), args);
         }
 
-        pub fn sendStr(world: *Self, comptime msg: anytype, args: anytype) !void {
+        pub fn sendStr(world: *Self, comptime optional_module_tag: anytype, comptime msg: anytype, args: anytype) !void {
             // Check for any module that has a handler function named msg (e.g. `fn init` would match "init")
             inline for (modules.modules) |M| {
-                if (!@hasDecl(M, msg)) continue;
+                const EventHandlers = blk: {
+                    switch (@typeInfo(@TypeOf(optional_module_tag))) {
+                        .Null => break :blk M,
+                        .EnumLiteral => {
+                            // Send this message only to the specified module
+                            if (M.name != optional_module_tag) continue;
+                            if (!@hasDecl(M, "local")) @compileError("Module ." ++ @tagName(M.name) ++ " does not have a `pub const local` event handler for message ." ++ msg);
+                            if (!@hasDecl(M.local, msg)) @compileError("Module ." ++ @tagName(M.name) ++ " does not have a `pub const local` event handler for message ." ++ msg);
+                            break :blk M.local;
+                        },
+                        .Optional => if (optional_module_tag) |v| {
+                            // Send this message only to the specified module
+                            if (M.name != v) continue;
+                            if (!@hasDecl(M, "local")) @compileError("Module ." ++ @tagName(M.name) ++ " does not have a `pub const local` event handler for message ." ++ msg);
+                            if (!@hasDecl(M.local, msg)) @compileError("Module ." ++ @tagName(M.name) ++ " does not have a `pub const local` event handler for message ." ++ msg);
+                            break :blk M.local;
+                        },
+                        else => @panic("unexpected optional_module_tag type: " ++ @typeName(@TypeOf(optional_module_tag))),
+                    }
+                };
+                if (!@hasDecl(EventHandlers, msg)) continue;
 
                 // Determine which parameters the handler function wants. e.g.:
                 //
                 // pub fn init(eng: *mach.Engine) !void
                 // pub fn init(eng: *mach.Engine, mach: *mach.Mod(.engine)) !void
                 //
-                const handler = @field(M, msg);
+                const handler = @field(EventHandlers, msg);
 
                 // Build a tuple of parameters that we can pass to the function, based on what
                 // *mach.Mod(.foo) types it expects as arguments.

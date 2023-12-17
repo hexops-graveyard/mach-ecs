@@ -115,5 +115,5 @@ test "example" {
 
     //-------------------------------------------------------------------------
     // Send events to modules
-    try world.send(.tick, .{});
+    try world.send(null, .tick, .{});
 }
