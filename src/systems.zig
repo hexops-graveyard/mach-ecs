@@ -17,7 +17,8 @@ pub fn World(comptime mods: anytype) type {
 
         const Self = @This();
 
-        pub fn Mod(comptime module_tag: anytype) type {
+        pub fn Mod(comptime Module: anytype) type {
+            const module_tag = Module.name;
             const State = @TypeOf(@field(@as(modules.State, undefined), @tagName(module_tag)));
             const components = @field(modules.components, @tagName(module_tag));
             return struct {
@@ -62,38 +63,6 @@ pub fn World(comptime mods: anytype) type {
                     try world.entities.removeComponent(entity, module_tag, component_name);
                 }
 
-                fn upper(c: u8) u8 {
-                    return switch (c) {
-                        'a' => 'A',
-                        'b' => 'B',
-                        'c' => 'C',
-                        'd' => 'D',
-                        'e' => 'E',
-                        'f' => 'F',
-                        'g' => 'G',
-                        'h' => 'H',
-                        'i' => 'I',
-                        'j' => 'J',
-                        'k' => 'K',
-                        'l' => 'L',
-                        'm' => 'M',
-                        'n' => 'N',
-                        'o' => 'O',
-                        'p' => 'P',
-                        'q' => 'Q',
-                        'r' => 'R',
-                        's' => 'S',
-                        't' => 'T',
-                        'u' => 'U',
-                        'v' => 'V',
-                        'w' => 'W',
-                        'x' => 'X',
-                        'y' => 'Y',
-                        'z' => 'Z',
-                        else => c,
-                    };
-                }
-
                 pub fn send(m: *@This(), comptime msg_tag: anytype, args: anytype) !void {
                     const mod_ptr: *Self.Mods() = @alignCast(@fieldParentPtr(Mods(), @tagName(module_tag), m));
                     const world = @fieldParentPtr(Self, "mod", mod_ptr);
@@ -121,10 +90,10 @@ pub fn World(comptime mods: anytype) type {
             inline for (modules.modules) |M| {
                 fields = fields ++ [_]std.builtin.Type.StructField{.{
                     .name = @tagName(M.name),
-                    .type = Mod(M.name),
+                    .type = Mod(M),
                     .default_value = null,
                     .is_comptime = false,
-                    .alignment = @alignOf(Mod(M.name)),
+                    .alignment = @alignOf(Mod(M)),
                 }};
             }
             return @Type(.{
@@ -190,12 +159,12 @@ pub fn World(comptime mods: anytype) type {
                 // Determine which parameters the handler function wants. e.g.:
                 //
                 // pub fn init(eng: *mach.Engine) !void
-                // pub fn init(eng: *mach.Engine, mach: *mach.Mod(.engine)) !void
+                // pub fn init(eng: *mach.Engine, mach: *mach.Engine.Mod) !void
                 //
                 const handler = @field(EventHandlers, msg);
 
                 // Build a tuple of parameters that we can pass to the function, based on what
-                // *mach.Mod(.foo) types it expects as arguments.
+                // *mach.Mod(T) types it expects as arguments.
                 var params: std.meta.ArgsTuple(@TypeOf(handler)) = undefined;
                 comptime var argIndex = 0;
                 inline for (@typeInfo(@TypeOf(params)).Struct.fields) |param| {

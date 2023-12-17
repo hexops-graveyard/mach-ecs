@@ -52,7 +52,7 @@ test "example" {
             pub const id = u32;
         };
 
-        pub fn tick(physics: *World(.{ Renderer, Physics }).Mod(.physics)) !void {
+        pub fn tick(physics: *World(.{ Renderer, Physics }).Mod(Physics)) !void {
             _ = physics;
         }
     });
@@ -64,8 +64,8 @@ test "example" {
         };
 
         pub fn tick(
-            physics: *World(.{ Renderer, Physics }).Mod(.physics),
-            renderer: *World(.{ Renderer, Physics }).Mod(.renderer),
+            physics: *World(.{ Renderer, Physics }).Mod(Physics),
+            renderer: *World(.{ Renderer, Physics }).Mod(Renderer),
         ) !void {
             _ = renderer;
             _ = physics;
