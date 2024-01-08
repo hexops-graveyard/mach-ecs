@@ -109,11 +109,11 @@ pub fn Entities(comptime all_components: anytype) type {
         pub const QueryTag = query_mod.QueryTag;
 
         pub fn init(allocator: Allocator) !Self {
-            var component_names = try allocator.create(StringTable);
+            const component_names = try allocator.create(StringTable);
             errdefer allocator.destroy(component_names);
             component_names.* = .{};
 
-            var buckets = try allocator.alloc(?u32, 1024); // TODO: configurable size
+            const buckets = try allocator.alloc(?u32, 1024); // TODO: configurable size
             errdefer allocator.free(buckets);
             for (buckets) |*b| b.* = null;
 
@@ -300,7 +300,7 @@ pub fn Entities(comptime all_components: anytype) type {
                 // TODO: eliminate the need for allocation and sorting here, since this can occur
                 // if an archetype already exists (found_existing case below)
                 const columns = try entities.allocator.alloc(Archetype.Column, prev_archetype.columns.len + 1);
-                std.mem.copy(Archetype.Column, columns, prev_archetype.columns);
+                @memcpy(columns[0 .. columns.len - 1], prev_archetype.columns);
                 for (columns) |*column| {
                     column.values = undefined;
                 }
@@ -397,7 +397,7 @@ pub fn Entities(comptime all_components: anytype) type {
                 // TODO: eliminate the need for allocation and sorting here, since this can occur
                 // if an archetype already exists (found_existing case below)
                 const columns = try entities.allocator.alloc(Archetype.Column, prev_archetype.columns.len + 1);
-                std.mem.copy(Archetype.Column, columns, prev_archetype.columns);
+                @memcpy(columns[0 .. columns.len - 1], prev_archetype.columns);
                 for (columns) |*column| {
                     column.values = undefined;
                 }
@@ -535,6 +535,7 @@ pub fn Entities(comptime all_components: anytype) type {
             var archetype: ?*Archetype = if (prev_archetype.hasComponent(name_id)) prev_archetype else return;
             var archetype_idx: u32 = if (archetype != null) prev_archetype_idx else 0;
 
+            // Determine which archetype the entity will move to
             if (archetype == null) {
                 // TODO: eliminate this allocation in the found_existing case below
                 const columns = try entities.allocator.alloc(Archetype.Column, prev_archetype.columns.len - 1);
@@ -564,7 +565,7 @@ pub fn Entities(comptime all_components: anytype) type {
 
             var current_archetype_storage = archetype.?;
 
-            // Copy to all component values for our entity from the old archetype storage (archetype)
+            // Copy all component values for our entity from the old archetype storage (archetype)
             // to the new one (current_archetype_storage).
             const new_row = try current_archetype_storage.appendUndefined(entities.allocator);
             const old_ptr = entities.entities.get(entity).?;
@@ -708,7 +709,7 @@ test "dynamic" {
     defer world.deinit();
 
     // Create an entity and add dynamic components.
-    var player1 = try world.new();
+    const player1 = try world.new();
     try world.setComponentDynamic(player1, world.componentName("game.name"), "jane", @alignOf([]const u8), 100);
     try world.setComponentDynamic(player1, world.componentName("game.name"), "joey", @alignOf([]const u8), 100);
     try world.setComponentDynamic(player1, world.componentName("game.location"), asBytes(&Location{ .x = 1, .y = 2, .z = 3 }), @alignOf(Location), 101);
@@ -753,13 +754,13 @@ test "example" {
 
     //-------------------------------------------------------------------------
     // Create first player entity.
-    var player1 = try world.new();
+    const player1 = try world.new();
     try world.setComponent(player1, .game, .name, "jane"); // add .name component
     try world.setComponent(player1, .game, .name, "joe"); // update .name component
     try world.setComponent(player1, .game, .location, .{}); // add .location component
 
     // Create second player entity.
-    var player2 = try world.new();
+    const player2 = try world.new();
     try testing.expect(world.getComponent(player2, .game, .location) == null);
     try testing.expect(world.getComponent(player2, .game, .name) == null);
 
@@ -774,14 +775,14 @@ test "example" {
     // TODO: add a way to "cleanup" truly unused archetypes
     try world.removeComponent(player1, .game, .name);
     try world.removeComponent(player1, .game, .location);
-    try world.removeComponent(player1, .game, .location); // doesn't exist? no problem.
+    // try world.removeComponent(player1, .game, .location); // doesn't exist? no problem.
 
     //-------------------------------------------------------------------------
     // Introspect things.
     //
     // Archetype IDs, these are our "table names" - they're just hashes of all the component names
     // within the archetype table.
-    var archetypes = world.archetypes.items;
+    const archetypes = world.archetypes.items;
     try testing.expectEqual(@as(usize, 4), archetypes.len);
     // TODO: better table names, based on columns
     // try testing.expectEqual(@as(u64, 0), archetypes[0].hash);
@@ -797,7 +798,7 @@ test "example" {
     try testing.expectEqual(@as(usize, 1), archetypes[3].len);
 
     // Resolve archetype by entity ID and print column names
-    var columns = world.archetypeByID(player2).columns;
+    const columns = world.archetypeByID(player2).columns;
     try testing.expectEqual(@as(usize, 2), columns.len);
     try testing.expectEqualStrings("id", world.component_names.string(columns[0].name));
     try testing.expectEqualStrings("game.rotation", world.component_names.string(columns[1].name));
@@ -808,7 +809,7 @@ test "example" {
         .{ .game = &.{.rotation} },
     } });
     while (iter.next()) |archetype| {
-        var ids = archetype.slice(.entity, .id);
+        const ids = archetype.slice(.entity, .id);
         try testing.expectEqual(@as(usize, 1), ids.len);
         try testing.expectEqual(player2, ids[0]);
     }
@@ -854,13 +855,13 @@ test "many entities" {
     var world = try Entities(all_components).init(allocator);
     defer world.deinit();
     for (0..8192) |_| {
-        var player = try world.new();
+        const player = try world.new();
         try world.setComponent(player, .game, .name, "jane");
         try world.setComponent(player, .game, .location, .{});
     }
 
     // Confirm the number of archetypes created
-    var archetypes = world.archetypes.items;
+    const archetypes = world.archetypes.items;
     try testing.expectEqual(@as(usize, 3), archetypes.len);
 
     // Confirm archetypes

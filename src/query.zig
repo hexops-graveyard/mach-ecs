@@ -31,7 +31,7 @@ pub fn Query(comptime all_components: anytype) type {
         pub const NamespaceComponent = T: {
             const namespaces = std.meta.fields(Namespace);
             var fields: [namespaces.len]std.builtin.Type.UnionField = undefined;
-            inline for (namespaces, 0..) |namespace, i| {
+            for (namespaces, 0..) |namespace, i| {
                 const ns = std.meta.stringToEnum(Namespace, namespace.name).?;
                 fields[i] = .{
                     .name = namespace.name,
@@ -87,28 +87,28 @@ test "query" {
     try testing.expectEqual(@as(Q.Component(.game), .name), .name);
 
     // ComponentList type lets us select multiple components within a namespace.
-    var x: Q.ComponentList(.physics) = &.{
+    const x: Q.ComponentList(.physics) = &.{
         .location,
         .rotation,
     };
     _ = x;
 
     // NamespaceComponent lets us select multiple components within multiple namespaces.
-    var y: []const Q.NamespaceComponent = &.{
+    const y: []const Q.NamespaceComponent = &.{
         .{ .physics = &.{ .location, .rotation } },
         .{ .game = &.{.name} },
     };
     _ = y;
 
     // Query matching entities with *any* of these components
-    var z: Q = .{ .any = &.{
+    const z: Q = .{ .any = &.{
         .{ .physics = &.{ .location, .rotation } },
         .{ .game = &.{.name} },
     } };
     _ = z;
 
     // Query matching entities with *all* of these components.
-    var w: Q = .{ .all = &.{
+    const w: Q = .{ .all = &.{
         .{ .physics = &.{ .location, .rotation } },
         .{ .game = &.{.name} },
     } };
