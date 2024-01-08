@@ -535,33 +535,31 @@ pub fn Entities(comptime all_components: anytype) type {
             var archetype: ?*Archetype = if (prev_archetype.hasComponent(name_id)) prev_archetype else return;
             var archetype_idx: u32 = if (archetype != null) prev_archetype_idx else 0;
 
-            // Determine which archetype the entity will move to
-            if (archetype == null) {
-                // TODO: eliminate this allocation in the found_existing case below
-                const columns = try entities.allocator.alloc(Archetype.Column, prev_archetype.columns.len - 1);
-                var i: usize = 0;
-                for (prev_archetype.columns) |old_column| {
-                    if (old_column.name == name_id) continue;
-                    columns[i] = old_column;
-                    columns[i].values = undefined;
-                    i += 1;
-                }
-
-                const archetype_entry = try entities.archetypeOrPut(columns);
-                if (!archetype_entry.found_existing) {
-                    archetype_entry.ptr.* = .{
-                        .len = 0,
-                        .capacity = 0,
-                        .columns = columns,
-                        .component_names = entities.component_names,
-                        .hash = archetype_entry.hash,
-                    };
-                } else {
-                    entities.allocator.free(columns);
-                }
-                archetype = archetype_entry.ptr;
-                archetype_idx = archetype_entry.index;
+            // Determine which archetype the entity will move to.
+            // TODO: eliminate this allocation in the found_existing case below
+            const columns = try entities.allocator.alloc(Archetype.Column, prev_archetype.columns.len - 1);
+            var i: usize = 0;
+            for (prev_archetype.columns) |old_column| {
+                if (old_column.name == name_id) continue;
+                columns[i] = old_column;
+                columns[i].values = undefined;
+                i += 1;
             }
+
+            const archetype_entry = try entities.archetypeOrPut(columns);
+            if (!archetype_entry.found_existing) {
+                archetype_entry.ptr.* = .{
+                    .len = 0,
+                    .capacity = 0,
+                    .columns = columns,
+                    .component_names = entities.component_names,
+                    .hash = archetype_entry.hash,
+                };
+            } else {
+                entities.allocator.free(columns);
+            }
+            archetype = archetype_entry.ptr;
+            archetype_idx = archetype_entry.index;
 
             var current_archetype_storage = archetype.?;
 
@@ -783,7 +781,7 @@ test "example" {
     // Archetype IDs, these are our "table names" - they're just hashes of all the component names
     // within the archetype table.
     const archetypes = world.archetypes.items;
-    try testing.expectEqual(@as(usize, 4), archetypes.len);
+    try testing.expectEqual(@as(usize, 5), archetypes.len);
     // TODO: better table names, based on columns
     // try testing.expectEqual(@as(u64, 0), archetypes[0].hash);
     // try testing.expectEqual(@as(u32, 4), archetypes[1].name);
@@ -792,9 +790,9 @@ test "example" {
     // try testing.expectEqual(@as(u32, 14), archetypes[4].name);
 
     // Number of (living) entities stored in an archetype table.
-    try testing.expectEqual(@as(usize, 0), archetypes[0].len);
+    try testing.expectEqual(@as(usize, 1), archetypes[0].len);
     try testing.expectEqual(@as(usize, 0), archetypes[1].len);
-    try testing.expectEqual(@as(usize, 1), archetypes[2].len);
+    try testing.expectEqual(@as(usize, 0), archetypes[2].len);
     try testing.expectEqual(@as(usize, 1), archetypes[3].len);
 
     // Resolve archetype by entity ID and print column names
