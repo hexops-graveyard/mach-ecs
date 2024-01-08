@@ -119,7 +119,7 @@ pub fn setCapacity(storage: *Archetype, gpa: Allocator, new_capacity: usize) !vo
         const old_values = column.values;
         const new_values = try gpa.alloc(u8, new_capacity * column.size);
         if (storage.capacity > 0) {
-            std.mem.copy(u8, new_values[0..], old_values);
+            @memcpy(new_values[0..old_values.len], old_values);
             gpa.free(old_values);
         }
         column.values = new_values;
@@ -137,7 +137,7 @@ pub fn setRow(storage: *Archetype, row_index: u32, row: anytype) void {
         const ColumnType = field.type;
         if (@sizeOf(ColumnType) == 0) continue;
 
-        var column = storage.columns[index];
+        const column = storage.columns[index];
         const column_values = @as([*]ColumnType, @ptrCast(@alignCast(column.values.ptr)));
         column_values[row_index] = @field(row, field.name);
     }
@@ -168,7 +168,7 @@ pub fn setDynamic(storage: *Archetype, row_index: u32, name: StringTable.Index, 
 
     const values = storage.getColumnValuesRaw(name) orelse @panic("no such component");
     const start = component.len * row_index;
-    std.mem.copy(u8, values[start..], component);
+    @memcpy(values[start .. start + component.len], component);
 }
 
 pub fn get(storage: *Archetype, row_index: u32, name: StringTable.Index, comptime ColumnType: type) ?ColumnType {
@@ -201,7 +201,7 @@ pub fn remove(storage: *Archetype, row_index: u32) void {
             const dst = column.values[dstStart .. dstStart + column.size];
             const srcStart = column.size * (storage.len - 1);
             const src = column.values[srcStart .. srcStart + column.size];
-            std.mem.copy(u8, dst, src);
+            @memcpy(dst, src);
         }
     }
     storage.len -= 1;
