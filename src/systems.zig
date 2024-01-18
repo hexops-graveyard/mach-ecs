@@ -121,7 +121,7 @@ pub fn World(comptime mods: anytype) type {
         /// Broadcasts an event to all modules that are subscribed to it.
         ///
         /// The message tag corresponds with the handler method name to be invoked. For example,
-        /// if `send(.tick)` is invoked, all modules which declare a `pub fn init` will be invoked.
+        /// if `send(.tick)` is invoked, all modules which declare a `pub fn tick` will be invoked.
         ///
         /// Events sent by Mach itself, or the application itself, may be single words. To prevent
         /// name conflicts, events sent by modules provided by a library should prefix their events
