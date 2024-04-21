@@ -9,4 +9,4 @@ The Mach entity component system, written from first-principles and designed for
 
 ## Moved
 
-This project has moved into [the Mach standard library](https://machengine.org/engine/stdlib/) (specifically [here](https://github.com/hexops/mach/tree/main/src/ecs)).
+This project has moved into [the Mach standard library](https://machengine.org/engine/stdlib/) (specifically [here](https://github.com/hexops/mach/tree/main/src/module)).
